@@ -407,6 +407,7 @@
   <button class="active" onclick="showPage('dashboard')">Dashboard</button>
   <button onclick="showPage('checkout')">Check Out</button>
   <button onclick="showPage('incidents')">Incidents</button>
+  <button onclick="showPage('loaners')">Loaners</button>
   <button onclick="showPage('inventory')">Inventory</button>
 </nav>
 
@@ -605,36 +606,30 @@
     </div>
   </div>
 
-  <!-- INVENTORY -->
-  <div id="page-inventory" class="page">
-    <h1 class="section-heading">Loaner Inventory</h1>
+  <!-- LOANERS -->
+  <div id="page-loaners" class="page">
+    <h1 class="section-heading">Loaner Devices</h1>
     <div class="search-bar">
-      <input type="text" id="inv-search" placeholder="Search asset tag, model, or building..." oninput="renderInventory()" />
-      <select id="inv-status-filter" onchange="renderInventory()" style="width:160px;">
+      <input type="text" id="inv-search" placeholder="Search asset tag, model, or building..." oninput="renderLoaners()" />
+      <select id="inv-status-filter" onchange="renderLoaners()" style="width:160px;">
         <option value="">All Statuses</option>
         <option>Available</option>
         <option>On Loan</option>
-        <option>Assigned</option>
-        <option>Unassigned</option>
         <option>Loaner</option>
         <option>Daily Loaner</option>
         <option>Needs Repair</option>
-        <option>Forgot Device</option>
       </select>
       <button class="btn btn-secondary" onclick="openAddDevice()">+ Add Device</button>
-      <button class="btn btn-primary" onclick="document.getElementById('csv-import-input').click()">⬆ Import CSV</button>
-      <input type="file" id="csv-import-input" accept=".csv" style="display:none" onchange="importCSV(event)" />
+      <button class="btn btn-primary" onclick="document.getElementById('loaner-csv-input').click()">⬆ Import CSV</button>
+      <input type="file" id="loaner-csv-input" accept=".csv" style="display:none" onchange="importLoanerCSV(event)" />
     </div>
-
-    <!-- Import status bar -->
-    <div id="import-status" style="display:none; margin-bottom:1rem; padding:12px 16px; border-radius:8px; font-size:14px; background:var(--accent-light); color:#085041; border:1px solid #9fe1cb;">
-      <span id="import-status-text"></span>
+    <div id="loaner-import-status" style="display:none; margin-bottom:1rem; padding:12px 16px; border-radius:8px; font-size:14px; background:var(--accent-light); color:#085041; border:1px solid #9fe1cb;">
+      <span id="loaner-import-text"></span>
     </div>
-
     <div class="card">
       <div style="padding:10px 14px; background:var(--bg-surface); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
         <span style="font-size:13px; color:var(--text-muted);" id="inv-count">0 devices</span>
-        <button class="btn btn-danger btn-sm" onclick="clearInventory()">Clear All</button>
+        <button class="btn btn-danger btn-sm" onclick="clearLoaners()">Clear All</button>
       </div>
       <table>
         <thead>
@@ -643,11 +638,9 @@
         <tbody id="inventory-tbody"></tbody>
       </table>
     </div>
-
-    <!-- Add device form -->
     <div id="add-device-form" style="display:none; margin-top:1.5rem;">
       <div class="card">
-        <div class="card-header"><h2>Add Single Device</h2></div>
+        <div class="card-header"><h2>Add Single Loaner</h2></div>
         <div class="card-body">
           <div class="form-grid">
             <div class="form-group">
@@ -682,6 +675,47 @@
     </div>
   </div>
 
+  <!-- FULL INVENTORY -->
+  <div id="page-inventory" class="page">
+    <h1 class="section-heading">Full Device Inventory</h1>
+    <div class="search-bar">
+      <input type="text" id="all-inv-search" placeholder="Search asset tag, model, serial, or building..." oninput="renderAllInventory()" />
+      <select id="all-inv-status-filter" onchange="renderAllInventory()" style="width:160px;">
+        <option value="">All Statuses</option>
+        <option>Assigned</option>
+        <option>Unassigned</option>
+        <option>Loaner</option>
+        <option>Daily Loaner</option>
+        <option>Needs Repair</option>
+        <option>Forgot Device</option>
+      </select>
+      <select id="all-inv-building-filter" onchange="renderAllInventory()" style="width:200px;">
+        <option value="">All Buildings</option>
+        <option>Bureau Valley High School</option>
+        <option>Bureau Valley Elementary and Junior High</option>
+        <option>Bureau Valley Elementary-Wyanet</option>
+        <option>Bureau Valley North</option>
+      </select>
+      <button class="btn btn-primary" onclick="document.getElementById('all-inv-csv-input').click()">⬆ Import CSV</button>
+      <input type="file" id="all-inv-csv-input" accept=".csv" style="display:none" onchange="importAllInventoryCSV(event)" />
+    </div>
+    <div id="all-inv-import-status" style="display:none; margin-bottom:1rem; padding:12px 16px; border-radius:8px; font-size:14px; background:var(--accent-light); color:#085041; border:1px solid #9fe1cb;">
+      <span id="all-inv-import-text"></span>
+    </div>
+    <div class="card">
+      <div style="padding:10px 14px; background:var(--bg-surface); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+        <span style="font-size:13px; color:var(--text-muted);" id="all-inv-count">0 devices</span>
+        <button class="btn btn-danger btn-sm" onclick="clearAllInventory()">Clear All</button>
+      </div>
+      <table>
+        <thead>
+          <tr><th>Asset Tag</th><th>Model</th><th>Serial</th><th>Building</th><th>Assigned To</th><th>Status</th></tr>
+        </thead>
+        <tbody id="all-inventory-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
 </main>
 
 <div class="toast" id="toast"></div>
@@ -689,30 +723,27 @@
 <script>
 const SHEET_URL = 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
 
-let checkouts = JSON.parse(localStorage.getItem('checkouts') || '[]');
-let inventory = JSON.parse(localStorage.getItem('inventory') || JSON.stringify([
-  { assetTag:'2888', serial:'5CD122DN6N', model:'HP Chromebook 14', status:'Available' },
-  { assetTag:'2766', serial:'GNY0214',    model:'Lenovo N22 Chromebook', status:'Available' },
-  { assetTag:'2968', serial:'YX04QL9K',   model:'HP Chromebook 14 G5 (Intel)', status:'Available' },
-  { assetTag:'2780', serial:'5CD122DNGN', model:'HP Chromebook 14', status:'Available' },
-  { assetTag:'2970', serial:'5CD122DNR8', model:'HP Chromebook 14', status:'Available' },
-  { assetTag:'2895', serial:'5CD91956RW', model:'HP Chromebook 14', status:'Available' },
-  { assetTag:'2985', serial:'YX04QJR7',   model:'HP Chromebook 14', status:'Available' },
+let checkouts    = JSON.parse(localStorage.getItem('checkouts') || '[]');
+let inventory    = JSON.parse(localStorage.getItem('inventory') || JSON.stringify([
+  { assetTag:'2888', serial:'5CD122DN6N', model:'HP Chromebook 14', building:'Bureau Valley High School', status:'Available' },
+  { assetTag:'2766', serial:'GNY0214',    model:'Lenovo N22 Chromebook', building:'Bureau Valley High School', status:'Available' },
+  { assetTag:'2968', serial:'YX04QL9K',   model:'HP Chromebook 14 G5 (Intel)', building:'Bureau Valley High School', status:'Available' },
 ]));
-
-let nextId = parseInt(localStorage.getItem('nextId') || '2020');
+let allInventory = JSON.parse(localStorage.getItem('allInventory') || '[]');
+let nextId       = parseInt(localStorage.getItem('nextId') || '2020');
 
 function save() {
-  localStorage.setItem('checkouts', JSON.stringify(checkouts));
-  localStorage.setItem('inventory', JSON.stringify(inventory));
-  localStorage.setItem('nextId', nextId);
+  localStorage.setItem('checkouts',    JSON.stringify(checkouts));
+  localStorage.setItem('inventory',    JSON.stringify(inventory));
+  localStorage.setItem('allInventory', JSON.stringify(allInventory));
+  localStorage.setItem('nextId',       nextId);
 }
 
 function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
-  const tabs = ['dashboard','checkout','incidents','inventory'];
+  const tabs = ['dashboard','checkout','incidents','loaners','inventory'];
   document.querySelectorAll('nav button')[tabs.indexOf(name)].classList.add('active');
   refreshAll();
 }
@@ -721,7 +752,8 @@ function refreshAll() {
   renderStats();
   renderDashboard();
   renderIncidents();
-  renderInventory();
+  renderLoaners();
+  renderAllInventory();
   renderAvailable();
   renderIncidentSummary();
 }
@@ -821,7 +853,7 @@ function renderIncidents() {
     </tr>`).join('');
 }
 
-function renderInventory() {
+function renderLoaners() {
   const search = (document.getElementById('inv-search')?.value || '').toLowerCase();
   const filter = document.getElementById('inv-status-filter')?.value || '';
   const tbody  = document.getElementById('inventory-tbody');
@@ -841,14 +873,52 @@ function renderInventory() {
       <td style="font-size:13px">${d.model}</td>
       <td style="font-size:12px;color:var(--text-muted)">${d.serial}</td>
       <td style="font-size:12px;color:var(--text-muted)">${d.building||'—'}</td>
-      <td><span class="badge ${d.status==='Available'||d.status==='Unassigned'?'badge-active':d.status==='On Loan'||d.status==='Assigned'?'badge-returned':'badge-repair'}">${d.status}</span></td>
-      <td>
-        <button class="btn btn-danger btn-sm" onclick="removeDevice('${d.assetTag}')">Remove</button>
-      </td>
+      <td><span class="badge ${d.status==='Available'?'badge-active':d.status==='On Loan'?'badge-returned':'badge-repair'}">${d.status}</span></td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeDevice('${d.assetTag}')">Remove</button></td>
     </tr>`).join('');
 
   if (rows.length > 200) {
-    tbody.innerHTML += `<tr><td colspan="6" style="text-align:center;padding:1rem;color:var(--text-muted);font-size:13px;">Showing 200 of ${rows.length} — use search to filter</td></tr>`;
+    tbody.innerHTML += `<tr><td colspan="6" style="text-align:center;padding:1rem;color:var(--text-muted);font-size:13px;">Showing 200 of ${rows.length.toLocaleString()} — use search to filter</td></tr>`;
+  }
+}
+
+function renderAllInventory() {
+  const search   = (document.getElementById('all-inv-search')?.value || '').toLowerCase();
+  const filter   = document.getElementById('all-inv-status-filter')?.value || '';
+  const building = document.getElementById('all-inv-building-filter')?.value || '';
+  const tbody    = document.getElementById('all-inventory-tbody');
+  if (!tbody) return;
+
+  const rows = allInventory.filter(d =>
+    (!search   || [d.assetTag, d.model, d.serial, d.building, d.owner].some(v => v && v.toLowerCase().includes(search))) &&
+    (!filter   || d.status === filter) &&
+    (!building || d.building === building)
+  );
+
+  const countEl = document.getElementById('all-inv-count');
+  if (countEl) countEl.textContent = `${rows.length.toLocaleString()} of ${allInventory.length.toLocaleString()} devices`;
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:3rem;color:var(--text-muted);">${allInventory.length ? 'No devices match your filters.' : 'No devices yet — import your TDT CSV to get started.'}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.slice(0, 200).map(d => `
+    <tr>
+      <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${d.assetTag}</code></td>
+      <td style="font-size:13px">${d.model}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${d.serial}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${d.building||'—'}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${d.owner||'—'}</td>
+      <td><span class="badge ${
+        d.status==='Assigned'    ? 'badge-returned' :
+        d.status==='Unassigned'  ? 'badge-active'   :
+        d.status==='Loaner'||d.status==='Daily Loaner' ? 'badge-active' :
+        'badge-repair'}">${d.status}</span></td>
+    </tr>`).join('');
+
+  if (rows.length > 200) {
+    tbody.innerHTML += `<tr><td colspan="6" style="text-align:center;padding:1rem;color:var(--text-muted);font-size:13px;">Showing 200 of ${rows.length.toLocaleString()} — use search or filters to narrow results</td></tr>`;
   }
 }
 
@@ -955,38 +1025,38 @@ function removeDevice(tag) {
   showToast('Device removed.');
 }
 
-function importCSV(event) {
+function importLoanerCSV(event) { importFromCSV(event, 'loaner'); }
+function importAllInventoryCSV(event) { importFromCSV(event, 'all'); }
+
+function importFromCSV(event, target) {
   const file = event.target.files[0];
   if (!file) return;
-
   const reader = new FileReader();
   reader.onload = function(e) {
     const lines  = e.target.result.split('\n').filter(l => l.trim());
     const header = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
 
-    // Map TDT column names → our fields
     const idx = {
-      assetTag : header.findIndex(h => h === 'AssetTag'),
-      serial   : header.findIndex(h => h === 'SerialNumber'),
-      mfr      : header.findIndex(h => h === 'Manufacturer'),
-      model    : header.findIndex(h => h === 'ModelNumber'),
-      building : header.findIndex(h => h === 'DeviceBuilding'),
-      status   : header.findIndex(h => h === 'DeviceStatus'),
+      assetTag  : header.findIndex(h => h === 'AssetTag'),
+      serial    : header.findIndex(h => h === 'SerialNumber'),
+      mfr       : header.findIndex(h => h === 'Manufacturer'),
+      model     : header.findIndex(h => h === 'ModelNumber'),
+      building  : header.findIndex(h => h === 'DeviceBuilding'),
+      status    : header.findIndex(h => h === 'DeviceStatus'),
+      ownerFirst: header.findIndex(h => h === 'OwnerFirstName'),
+      ownerLast : header.findIndex(h => h === 'OwnerLastName'),
     };
-
-    // Fallback for simple CSV with just our own columns
     if (idx.assetTag === -1) idx.assetTag = header.findIndex(h => /asset.?tag/i.test(h));
     if (idx.serial   === -1) idx.serial   = header.findIndex(h => /serial/i.test(h));
     if (idx.model    === -1) idx.model    = header.findIndex(h => /model/i.test(h));
 
     if (idx.assetTag === -1) {
-      showImportStatus('Could not find AssetTag column. Is this a TDT export?', 'error');
+      showBanner(target, 'Could not find AssetTag column. Is this a TDT export?', 'error');
       return;
     }
 
     function parseRow(line) {
-      const cols = [];
-      let cur = '', inQ = false;
+      const cols = []; let cur = '', inQ = false;
       for (let i = 0; i < line.length; i++) {
         const ch = line[i];
         if (ch === '"') { inQ = !inQ; }
@@ -998,27 +1068,30 @@ function importCSV(event) {
     }
 
     let added = 0, skipped = 0, dupes = 0;
-    const existing = new Set(inventory.map(d => d.assetTag));
+    const dataStore = target === 'loaner' ? inventory : allInventory;
+    const existing  = new Set(dataStore.map(d => d.assetTag));
 
     for (let i = 1; i < lines.length; i++) {
-      const cols    = parseRow(lines[i]);
-      const status  = idx.status !== -1 ? cols[idx.status]?.trim() : '';
+      const cols   = parseRow(lines[i]);
+      const status = idx.status !== -1 ? cols[idx.status]?.trim() : '';
       if (status === 'Decommissioned') { skipped++; continue; }
-
       const assetTag = cols[idx.assetTag]?.trim();
       if (!assetTag) { skipped++; continue; }
       if (existing.has(assetTag)) { dupes++; continue; }
 
-      const mfrName  = idx.mfr !== -1 ? cols[idx.mfr]?.trim() : '';
-      const modelNum = idx.model !== -1 ? cols[idx.model]?.trim() : '';
-      const model    = mfrName ? `${mfrName} ${modelNum}`.trim() : modelNum;
+      const mfrName  = idx.mfr   !== -1 ? cols[idx.mfr]?.trim()       : '';
+      const modelNum = idx.model !== -1 ? cols[idx.model]?.trim()      : '';
+      const firstName= idx.ownerFirst !== -1 ? cols[idx.ownerFirst]?.trim() : '';
+      const lastName = idx.ownerLast  !== -1 ? cols[idx.ownerLast]?.trim()  : '';
+      const owner    = [firstName, lastName].filter(Boolean).join(' ');
 
-      inventory.push({
+      dataStore.push({
         assetTag,
-        serial   : idx.serial !== -1 ? cols[idx.serial]?.trim() : '',
-        model    : model || 'Unknown',
-        building : idx.building !== -1 ? cols[idx.building]?.trim() : '',
-        status   : status || 'Unassigned',
+        serial  : idx.serial   !== -1 ? cols[idx.serial]?.trim()   : '',
+        model   : (mfrName ? `${mfrName} ${modelNum}` : modelNum).trim() || 'Unknown',
+        building: idx.building !== -1 ? cols[idx.building]?.trim() : '',
+        status  : status || 'Unassigned',
+        owner,
       });
       existing.add(assetTag);
       added++;
@@ -1026,35 +1099,38 @@ function importCSV(event) {
 
     save();
     refreshAll();
-    showImportStatus(`✓ Imported ${added.toLocaleString()} devices. ${dupes > 0 ? dupes + ' duplicates skipped. ' : ''}${skipped > 0 ? skipped + ' decommissioned skipped.' : ''}`, 'success');
+    showBanner(target, `✓ Imported ${added.toLocaleString()} devices.${dupes ? ' ' + dupes + ' duplicates skipped.' : ''}${skipped ? ' ' + skipped + ' decommissioned skipped.' : ''}`, 'success');
     event.target.value = '';
   };
   reader.readAsText(file);
 }
 
-function showImportStatus(msg, type) {
-  const el = document.getElementById('import-status');
-  const txt = document.getElementById('import-status-text');
-  el.style.display = 'block';
-  txt.textContent  = msg;
-  if (type === 'error') {
-    el.style.background = 'var(--danger-light)';
-    el.style.color      = 'var(--danger)';
-    el.style.border     = '1px solid #f09595';
-  } else {
-    el.style.background = 'var(--accent-light)';
-    el.style.color      = '#085041';
-    el.style.border     = '1px solid #9fe1cb';
-  }
+function showBanner(target, msg, type) {
+  const id  = target === 'loaner' ? 'loaner-import-status' : 'all-inv-import-status';
+  const tid = target === 'loaner' ? 'loaner-import-text'   : 'all-inv-import-text';
+  const el  = document.getElementById(id);
+  const txt = document.getElementById(tid);
+  if (!el || !txt) return;
+  el.style.display    = 'block';
+  txt.textContent     = msg;
+  el.style.background = type === 'error' ? 'var(--danger-light)'  : 'var(--accent-light)';
+  el.style.color      = type === 'error' ? 'var(--danger)'        : '#085041';
+  el.style.border     = type === 'error' ? '1px solid #f09595'    : '1px solid #9fe1cb';
   setTimeout(() => { el.style.display = 'none'; }, 6000);
 }
 
-function clearInventory() {
-  if (!confirm(`Clear all ${inventory.length.toLocaleString()} devices from inventory? This cannot be undone.`)) return;
+function clearLoaners() {
+  if (!confirm(`Clear all ${inventory.length.toLocaleString()} loaner devices? This cannot be undone.`)) return;
   inventory = [];
-  save();
-  refreshAll();
-  showToast('Inventory cleared.');
+  save(); refreshAll();
+  showToast('Loaner devices cleared.');
+}
+
+function clearAllInventory() {
+  if (!confirm(`Clear all ${allInventory.length.toLocaleString()} devices from full inventory? This cannot be undone.`)) return;
+  allInventory = [];
+  save(); refreshAll();
+  showToast('Full inventory cleared.');
 }
 
 function openAddDevice() {

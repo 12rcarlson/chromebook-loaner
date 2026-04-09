@@ -1085,29 +1085,33 @@ function importFromCSV(event, target) {
         return cols;
       }
 
+      function col(cols, i) {
+        return (i !== -1 && cols[i] !== undefined) ? cols[i].trim() : '';
+      }
+
       let added = 0, skipped = 0, dupes = 0;
       const dataStore = target === 'loaner' ? inventory : allInventory;
       const existing  = new Set(dataStore.map(d => d.assetTag));
 
       for (let i = 1; i < lines.length; i++) {
-        const cols   = parseRow(lines[i]);
-        const status = idx.status !== -1 ? cols[idx.status]?.trim() : '';
+        const cols     = parseRow(lines[i]);
+        const status   = col(cols, idx.status);
         if (status === 'Decommissioned') { skipped++; continue; }
-        const assetTag = cols[idx.assetTag]?.trim();
+        const assetTag = col(cols, idx.assetTag);
         if (!assetTag) { skipped++; continue; }
         if (existing.has(assetTag)) { dupes++; continue; }
 
-        const mfrName  = idx.mfr        !== -1 ? cols[idx.mfr]?.trim()        : '';
-        const modelNum = idx.model      !== -1 ? cols[idx.model]?.trim()       : '';
-        const firstName= idx.ownerFirst !== -1 ? cols[idx.ownerFirst]?.trim()  : '';
-        const lastName = idx.ownerLast  !== -1 ? cols[idx.ownerLast]?.trim()   : '';
+        const mfrName  = col(cols, idx.mfr);
+        const modelNum = col(cols, idx.model);
+        const firstName= col(cols, idx.ownerFirst);
+        const lastName = col(cols, idx.ownerLast);
         const owner    = [firstName, lastName].filter(Boolean).join(' ');
 
         dataStore.push({
           assetTag,
-          serial  : idx.serial   !== -1 ? cols[idx.serial]?.trim()   : '',
+          serial  : col(cols, idx.serial),
           model   : (mfrName ? `${mfrName} ${modelNum}` : modelNum).trim() || 'Unknown',
-          building: idx.building !== -1 ? cols[idx.building]?.trim() : '',
+          building: col(cols, idx.building),
           status  : status || 'Unassigned',
           owner,
         });

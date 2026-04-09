@@ -733,10 +733,19 @@ let allInventory = JSON.parse(localStorage.getItem('allInventory') || '[]');
 let nextId       = parseInt(localStorage.getItem('nextId') || '2020');
 
 function save() {
-  localStorage.setItem('checkouts',    JSON.stringify(checkouts));
-  localStorage.setItem('inventory',    JSON.stringify(inventory));
-  localStorage.setItem('allInventory', JSON.stringify(allInventory));
-  localStorage.setItem('nextId',       nextId);
+  try {
+    localStorage.setItem('checkouts',    JSON.stringify(checkouts));
+    localStorage.setItem('inventory',    JSON.stringify(inventory));
+    localStorage.setItem('allInventory', JSON.stringify(allInventory));
+    localStorage.setItem('nextId',       nextId);
+  } catch(e) {
+    if (e.name === 'QuotaExceededError' || e.code === 22) {
+      showToast('Storage limit reached — inventory will not persist between sessions. Use Export CSV to save records.', 'error');
+      console.warn('localStorage quota exceeded:', e);
+    } else {
+      console.error('Save error:', e);
+    }
+  }
 }
 
 function showPage(name) {
@@ -1031,75 +1040,88 @@ function importAllInventoryCSV(event) { importFromCSV(event, 'all'); }
 function importFromCSV(event, target) {
   const file = event.target.files[0];
   if (!file) return;
+
+  showBanner(target, 'Reading file...', 'success');
+
   const reader = new FileReader();
+  reader.onerror = function() {
+    showBanner(target, 'Error reading file. Please try again.', 'error');
+  };
   reader.onload = function(e) {
-    const lines  = e.target.result.split('\n').filter(l => l.trim());
-    const header = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+    try {
+      const lines  = e.target.result.split('\n').filter(l => l.trim());
+      if (lines.length < 2) { showBanner(target, 'File appears empty.', 'error'); return; }
 
-    const idx = {
-      assetTag  : header.findIndex(h => h === 'AssetTag'),
-      serial    : header.findIndex(h => h === 'SerialNumber'),
-      mfr       : header.findIndex(h => h === 'Manufacturer'),
-      model     : header.findIndex(h => h === 'ModelNumber'),
-      building  : header.findIndex(h => h === 'DeviceBuilding'),
-      status    : header.findIndex(h => h === 'DeviceStatus'),
-      ownerFirst: header.findIndex(h => h === 'OwnerFirstName'),
-      ownerLast : header.findIndex(h => h === 'OwnerLastName'),
-    };
-    if (idx.assetTag === -1) idx.assetTag = header.findIndex(h => /asset.?tag/i.test(h));
-    if (idx.serial   === -1) idx.serial   = header.findIndex(h => /serial/i.test(h));
-    if (idx.model    === -1) idx.model    = header.findIndex(h => /model/i.test(h));
+      const header = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
 
-    if (idx.assetTag === -1) {
-      showBanner(target, 'Could not find AssetTag column. Is this a TDT export?', 'error');
-      return;
-    }
+      const idx = {
+        assetTag  : header.findIndex(h => h === 'AssetTag'),
+        serial    : header.findIndex(h => h === 'SerialNumber'),
+        mfr       : header.findIndex(h => h === 'Manufacturer'),
+        model     : header.findIndex(h => h === 'ModelNumber'),
+        building  : header.findIndex(h => h === 'DeviceBuilding'),
+        status    : header.findIndex(h => h === 'DeviceStatus'),
+        ownerFirst: header.findIndex(h => h === 'OwnerFirstName'),
+        ownerLast : header.findIndex(h => h === 'OwnerLastName'),
+      };
+      if (idx.assetTag === -1) idx.assetTag = header.findIndex(h => /asset.?tag/i.test(h));
+      if (idx.serial   === -1) idx.serial   = header.findIndex(h => /serial/i.test(h));
+      if (idx.model    === -1) idx.model    = header.findIndex(h => /model/i.test(h));
 
-    function parseRow(line) {
-      const cols = []; let cur = '', inQ = false;
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
-        if (ch === '"') { inQ = !inQ; }
-        else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
-        else { cur += ch; }
+      if (idx.assetTag === -1) {
+        showBanner(target, 'Could not find AssetTag column. Is this a TDT export?', 'error');
+        return;
       }
-      cols.push(cur.trim());
-      return cols;
+
+      function parseRow(line) {
+        const cols = []; let cur = '', inQ = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') { inQ = !inQ; }
+          else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
+          else { cur += ch; }
+        }
+        cols.push(cur.trim());
+        return cols;
+      }
+
+      let added = 0, skipped = 0, dupes = 0;
+      const dataStore = target === 'loaner' ? inventory : allInventory;
+      const existing  = new Set(dataStore.map(d => d.assetTag));
+
+      for (let i = 1; i < lines.length; i++) {
+        const cols   = parseRow(lines[i]);
+        const status = idx.status !== -1 ? cols[idx.status]?.trim() : '';
+        if (status === 'Decommissioned') { skipped++; continue; }
+        const assetTag = cols[idx.assetTag]?.trim();
+        if (!assetTag) { skipped++; continue; }
+        if (existing.has(assetTag)) { dupes++; continue; }
+
+        const mfrName  = idx.mfr        !== -1 ? cols[idx.mfr]?.trim()        : '';
+        const modelNum = idx.model      !== -1 ? cols[idx.model]?.trim()       : '';
+        const firstName= idx.ownerFirst !== -1 ? cols[idx.ownerFirst]?.trim()  : '';
+        const lastName = idx.ownerLast  !== -1 ? cols[idx.ownerLast]?.trim()   : '';
+        const owner    = [firstName, lastName].filter(Boolean).join(' ');
+
+        dataStore.push({
+          assetTag,
+          serial  : idx.serial   !== -1 ? cols[idx.serial]?.trim()   : '',
+          model   : (mfrName ? `${mfrName} ${modelNum}` : modelNum).trim() || 'Unknown',
+          building: idx.building !== -1 ? cols[idx.building]?.trim() : '',
+          status  : status || 'Unassigned',
+          owner,
+        });
+        existing.add(assetTag);
+        added++;
+      }
+
+      save();
+      refreshAll();
+      showBanner(target, `✓ Imported ${added.toLocaleString()} devices.${dupes ? ' ' + dupes + ' duplicates skipped.' : ''}${skipped ? ' ' + skipped + ' decommissioned skipped.' : ''}`, 'success');
+    } catch(err) {
+      console.error('Import error:', err);
+      showBanner(target, 'Import failed: ' + err.message, 'error');
     }
-
-    let added = 0, skipped = 0, dupes = 0;
-    const dataStore = target === 'loaner' ? inventory : allInventory;
-    const existing  = new Set(dataStore.map(d => d.assetTag));
-
-    for (let i = 1; i < lines.length; i++) {
-      const cols   = parseRow(lines[i]);
-      const status = idx.status !== -1 ? cols[idx.status]?.trim() : '';
-      if (status === 'Decommissioned') { skipped++; continue; }
-      const assetTag = cols[idx.assetTag]?.trim();
-      if (!assetTag) { skipped++; continue; }
-      if (existing.has(assetTag)) { dupes++; continue; }
-
-      const mfrName  = idx.mfr   !== -1 ? cols[idx.mfr]?.trim()       : '';
-      const modelNum = idx.model !== -1 ? cols[idx.model]?.trim()      : '';
-      const firstName= idx.ownerFirst !== -1 ? cols[idx.ownerFirst]?.trim() : '';
-      const lastName = idx.ownerLast  !== -1 ? cols[idx.ownerLast]?.trim()  : '';
-      const owner    = [firstName, lastName].filter(Boolean).join(' ');
-
-      dataStore.push({
-        assetTag,
-        serial  : idx.serial   !== -1 ? cols[idx.serial]?.trim()   : '',
-        model   : (mfrName ? `${mfrName} ${modelNum}` : modelNum).trim() || 'Unknown',
-        building: idx.building !== -1 ? cols[idx.building]?.trim() : '',
-        status  : status || 'Unassigned',
-        owner,
-      });
-      existing.add(assetTag);
-      added++;
-    }
-
-    save();
-    refreshAll();
-    showBanner(target, `✓ Imported ${added.toLocaleString()} devices.${dupes ? ' ' + dupes + ' duplicates skipped.' : ''}${skipped ? ' ' + skipped + ' decommissioned skipped.' : ''}`, 'success');
     event.target.value = '';
   };
   reader.readAsText(file);

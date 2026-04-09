@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chromebook Loaner System</title>
+  <style>
+    :root {
+      --primary: #1a56a0;
+      --primary-light: #e6f1fb;
+      --primary-dark: #0c3f7a;
+      --accent: #1d9e75;
+      --accent-light: #e1f5ee;
+      --danger: #a32d2d;
+      --danger-light: #fcebeb;
+      --warning: #854f0b;
+      --warning-light: #faeeda;
+      --neutral: #5f5e5a;
+      --neutral-light: #f1efe8;
+      --border: #d3d1c7;
+      --text: #2c2c2a;
+      --text-muted: #888780;
+      --bg: #ffffff;
+      --bg-surface: #f8f7f4;
+      --radius: 10px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg-surface);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--primary);
+      color: #fff;
+      padding: 0 2rem;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+
+    header .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+    }
+
+    header .brand svg { opacity: 0.9; }
+
+    header .school-name {
+      font-size: 13px;
+      opacity: 0.75;
+      font-weight: 400;
+    }
+
+    nav {
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      display: flex;
+      gap: 0;
+    }
+
+    nav button {
+      background: none;
+      border: none;
+      padding: 14px 18px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+
+    nav button:hover { color: var(--primary); }
+
+    nav button.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      box-shadow: var(--shadow);
+    }
+
+    .stat-card .label {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .stat-card .value {
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .stat-card.blue .value { color: var(--primary); }
+    .stat-card.green .value { color: var(--accent); }
+    .stat-card.amber .value { color: var(--warning); }
+    .stat-card.red .value { color: var(--danger); }
+
+    .card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-header h2 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .card-body { padding: 1.5rem; }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-group.full { grid-column: 1 / -1; }
+
+    label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    input, select, textarea {
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 9px 12px;
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg);
+      transition: border-color 0.15s, box-shadow 0.15s;
+      font-family: inherit;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(26,86,160,0.12);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 18px;
+      border-radius: 7px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .btn-primary:hover { background: var(--primary-dark); }
+
+    .btn-secondary {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover { background: var(--bg-surface); }
+
+    .btn-danger {
+      background: var(--danger-light);
+      color: var(--danger);
+      border: 1px solid #f0a0a0;
+    }
+
+    .btn-success {
+      background: var(--accent-light);
+      color: #085041;
+      border: 1px solid #9fe1cb;
+    }
+
+    .btn-sm {
+      padding: 5px 10px;
+      font-size: 12px;
+      border-radius: 5px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    thead th {
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+
+    tbody tr:hover { background: var(--bg-surface); }
+    tbody tr:last-child { border-bottom: none; }
+
+    td { padding: 11px 14px; }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .badge-forgot {
+      background: var(--warning-light);
+      color: var(--warning);
+    }
+
+    .badge-repair {
+      background: var(--danger-light);
+      color: var(--danger);
+    }
+
+    .badge-lost {
+      background: #fbeaf0;
+      color: #993556;
+    }
+
+    .badge-active {
+      background: var(--accent-light);
+      color: #085041;
+    }
+
+    .badge-returned {
+      background: var(--neutral-light);
+      color: var(--neutral);
+    }
+
+    .page { display: none; }
+    .page.active { display: block; }
+
+    .actions { display: flex; gap: 6px; }
+
+    .search-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 1.25rem;
+    }
+
+    .search-bar input { flex: 1; }
+
+    .section-heading {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+      color: var(--text);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: var(--text-muted);
+    }
+
+    .empty-state .icon {
+      font-size: 40px;
+      margin-bottom: 1rem;
+      opacity: 0.4;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #2c2c2a;
+      color: #fff;
+      padding: 12px 18px;
+      border-radius: 8px;
+      font-size: 14px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      transform: translateY(80px);
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 1000;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .toast.success { background: #085041; }
+    .toast.error { background: var(--danger); }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+
+    .incident-type-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 1.25rem;
+    }
+
+    .type-tab {
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      color: var(--text-muted);
+    }
+
+    .type-tab.active-forgot { background: var(--warning-light); border-color: #f9c75e; color: var(--warning); }
+    .type-tab.active-repair { background: var(--danger-light); border-color: #f09595; color: var(--danger); }
+    .type-tab.active-lost   { background: #fbeaf0; border-color: #ed93b1; color: #993556; }
+
+    @media (max-width: 700px) {
+      .stats-bar { grid-template-columns: 1fr 1fr; }
+      .form-grid { grid-template-columns: 1fr; }
+      .two-col { grid-template-columns: 1fr; }
+      main { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <svg width="24" height="24" fill="none" viewBox="0 0 24 24">
+      <rect x="2" y="5" width="20" height="13" rx="2" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.8)" stroke-width="1.5"/>
+      <rect x="8" y="18" width="8" height="2" rx="1" fill="rgba(255,255,255,0.7)"/>
+      <rect x="5" y="8" width="14" height="7" rx="1" fill="rgba(255,255,255,0.15)"/>
+    </svg>
+    Chromebook Loaner System
+    <span class="school-name">— Bureau Valley</span>
+  </div>
+  <span style="font-size:13px; opacity:0.65;" id="clock"></span>
+</header>
+
+<nav>
+  <button class="active" onclick="showPage('dashboard')">Dashboard</button>
+  <button onclick="showPage('checkout')">Check Out</button>
+  <button onclick="showPage('incidents')">Incidents</button>
+  <button onclick="showPage('inventory')">Inventory</button>
+</nav>
+
+<main>
+
+  <!-- DASHBOARD -->
+  <div id="page-dashboard" class="page active">
+    <div class="stats-bar">
+      <div class="stat-card blue">
+        <div class="label">Active Loaners</div>
+        <div class="value" id="stat-active">0</div>
+      </div>
+      <div class="stat-card amber">
+        <div class="label">Forgot Device</div>
+        <div class="value" id="stat-forgot">0</div>
+      </div>
+      <div class="stat-card red">
+        <div class="label">Needs Repair</div>
+        <div class="value" id="stat-repair">0</div>
+      </div>
+      <div class="stat-card green">
+        <div class="label">Available Devices</div>
+        <div class="value" id="stat-available">0</div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-header">
+          <h2>Active Checkouts Today</h2>
+          <button class="btn btn-primary btn-sm" onclick="showPage('checkout')">+ Check Out</button>
+        </div>
+        <div id="dashboard-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Asset Tag</th>
+                <th>Type</th>
+                <th>Due</th>
+              </tr>
+            </thead>
+            <tbody id="dashboard-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Recent Incidents</h2>
+          <button class="btn btn-secondary btn-sm" onclick="showPage('incidents')">View All</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Student</th>
+              <th>Issue</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody id="incident-summary-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHECK OUT -->
+  <div id="page-checkout" class="page">
+    <h1 class="section-heading">Check Out Loaner</h1>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-header"><h2>New Checkout</h2></div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="co-student-name">Student Name</label>
+              <input type="text" id="co-student-name" placeholder="Last, First" />
+            </div>
+            <div class="form-group">
+              <label for="co-student-id">Student ID</label>
+              <input type="text" id="co-student-id" placeholder="e.g. 12345" />
+            </div>
+            <div class="form-group">
+              <label for="co-grade">Grade Level</label>
+              <select id="co-grade">
+                <option value="">Select grade</option>
+                <option>09</option><option>10</option><option>11</option><option>12</option>
+                <option>K</option><option>1</option><option>2</option><option>3</option>
+                <option>4</option><option>5</option><option>6</option><option>7</option><option>8</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="co-building">Building</label>
+              <select id="co-building">
+                <option value="">Select building</option>
+                <option>Bureau Valley High School</option>
+                <option>Bureau Valley Elementary and Junior High</option>
+                <option>Bureau Valley Elementary-Wyanet</option>
+                <option>Bureau Valley North</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="co-asset">Asset Tag</label>
+              <input type="text" id="co-asset" placeholder="e.g. 2888" />
+            </div>
+            <div class="form-group">
+              <label for="co-serial">Serial Number</label>
+              <input type="text" id="co-serial" placeholder="e.g. 5CD122DN6N" />
+            </div>
+            <div class="form-group">
+              <label for="co-type">Incident Type</label>
+              <select id="co-type">
+                <option value="Forgot Device">Forgot Device</option>
+                <option value="Needs Repair">Needs Repair</option>
+                <option value="Lost">Lost</option>
+                <option value="Daily Loaner">Daily Loaner</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="co-due">Due Back</label>
+              <input type="date" id="co-due" />
+            </div>
+            <div class="form-group full">
+              <label for="co-notes">Notes</label>
+              <textarea id="co-notes" rows="2" placeholder="Optional notes..."></textarea>
+            </div>
+          </div>
+          <div style="margin-top:1.25rem; display:flex; gap:8px;">
+            <button class="btn btn-primary" onclick="submitCheckout()">Save Checkout</button>
+            <button class="btn btn-secondary" onclick="clearCheckoutForm()">Clear</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2>Available Devices</h2></div>
+        <table>
+          <thead>
+            <tr><th>Asset Tag</th><th>Model</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody id="available-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- INCIDENTS -->
+  <div id="page-incidents" class="page">
+    <h1 class="section-heading">Incident Management</h1>
+    <div class="search-bar">
+      <input type="text" id="incident-search" placeholder="Search by student, asset tag, or serial..." oninput="renderIncidents()" />
+      <select id="incident-filter" onchange="renderIncidents()">
+        <option value="">All Types</option>
+        <option>Forgot Device</option>
+        <option>Needs Repair</option>
+        <option>Lost</option>
+        <option>Daily Loaner</option>
+      </select>
+      <button class="btn btn-secondary" onclick="exportCSV()">Export CSV</button>
+    </div>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Student</th>
+            <th>Grade</th>
+            <th>Asset Tag</th>
+            <th>Serial</th>
+            <th>Type</th>
+            <th>Checkout</th>
+            <th>Due Back</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="incident-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- INVENTORY -->
+  <div id="page-inventory" class="page">
+    <h1 class="section-heading">Loaner Inventory</h1>
+    <div class="search-bar">
+      <input type="text" id="inv-search" placeholder="Search asset tag or model..." oninput="renderInventory()" />
+      <button class="btn btn-primary" onclick="openAddDevice()">+ Add Device</button>
+    </div>
+    <div class="card">
+      <table>
+        <thead>
+          <tr><th>Asset Tag</th><th>Model</th><th>Serial</th><th>Status</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="inventory-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Add device form -->
+    <div id="add-device-form" style="display:none; margin-top:1.5rem;">
+      <div class="card">
+        <div class="card-header"><h2>Add Loaner Device</h2></div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Asset Tag</label>
+              <input type="text" id="inv-asset" placeholder="e.g. 2888" />
+            </div>
+            <div class="form-group">
+              <label>Serial Number</label>
+              <input type="text" id="inv-serial" placeholder="e.g. 5CD122DN6N" />
+            </div>
+            <div class="form-group full">
+              <label>Model</label>
+              <select id="inv-model">
+                <option>HP Chromebook 14</option>
+                <option>HP Chromebook 14 G5 (Intel)</option>
+                <option>HP Chromebook 14A G5</option>
+                <option>Lenovo 100e Chromebook 2nd Gen MTK</option>
+                <option>Lenovo N22 Chromebook</option>
+                <option>ASUS Chromebook C523NA</option>
+                <option>Other</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-top:1rem; display:flex; gap:8px;">
+            <button class="btn btn-primary" onclick="addDevice()">Add Device</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('add-device-form').style.display='none'">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbzeQZnlfVImhXXoKImhbwAIgwabysQVNZhbZiwf6MiQ6q9xkgGO759WIrm4YNHUXni2/exec';
+
+let checkouts = JSON.parse(localStorage.getItem('checkouts') || '[]');
+let inventory = JSON.parse(localStorage.getItem('inventory') || JSON.stringify([
+  { assetTag:'2888', serial:'5CD122DN6N', model:'HP Chromebook 14', status:'Available' },
+  { assetTag:'2766', serial:'GNY0214',    model:'Lenovo N22 Chromebook', status:'Available' },
+  { assetTag:'2968', serial:'YX04QL9K',   model:'HP Chromebook 14 G5 (Intel)', status:'Available' },
+  { assetTag:'2780', serial:'5CD122DNGN', model:'HP Chromebook 14', status:'Available' },
+  { assetTag:'2970', serial:'5CD122DNR8', model:'HP Chromebook 14', status:'Available' },
+  { assetTag:'2895', serial:'5CD91956RW', model:'HP Chromebook 14', status:'Available' },
+  { assetTag:'2985', serial:'YX04QJR7',   model:'HP Chromebook 14', status:'Available' },
+]));
+
+let nextId = parseInt(localStorage.getItem('nextId') || '2020');
+
+function save() {
+  localStorage.setItem('checkouts', JSON.stringify(checkouts));
+  localStorage.setItem('inventory', JSON.stringify(inventory));
+  localStorage.setItem('nextId', nextId);
+}
+
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  const tabs = ['dashboard','checkout','incidents','inventory'];
+  document.querySelectorAll('nav button')[tabs.indexOf(name)].classList.add('active');
+  refreshAll();
+}
+
+function refreshAll() {
+  renderStats();
+  renderDashboard();
+  renderIncidents();
+  renderInventory();
+  renderAvailable();
+  renderIncidentSummary();
+}
+
+function badgeHtml(type) {
+  const map = {
+    'Forgot Device': 'badge-forgot',
+    'Needs Repair':  'badge-repair',
+    'Lost':          'badge-lost',
+    'Daily Loaner':  'badge-active',
+  };
+  return `<span class="badge ${map[type]||''}">${type}</span>`;
+}
+
+function statusBadge(s) {
+  if (s === 'Active')    return `<span class="badge badge-active">Active</span>`;
+  if (s === 'Returned')  return `<span class="badge badge-returned">Returned</span>`;
+  return `<span class="badge badge-returned">${s}</span>`;
+}
+
+function renderStats() {
+  const active = checkouts.filter(c => c.status === 'Active').length;
+  const forgot = checkouts.filter(c => c.status === 'Active' && c.type === 'Forgot Device').length;
+  const repair = checkouts.filter(c => c.status === 'Active' && c.type === 'Needs Repair').length;
+  const avail  = inventory.filter(d => d.status === 'Available').length;
+  document.getElementById('stat-active').textContent    = active;
+  document.getElementById('stat-forgot').textContent    = forgot;
+  document.getElementById('stat-repair').textContent    = repair;
+  document.getElementById('stat-available').textContent = avail;
+}
+
+function renderDashboard() {
+  const tbody = document.getElementById('dashboard-tbody');
+  const active = checkouts.filter(c => c.status === 'Active').slice(-10).reverse();
+  if (!active.length) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">No active checkouts</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = active.map(c => `
+    <tr>
+      <td>${c.studentName}</td>
+      <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${c.assetTag}</code></td>
+      <td>${badgeHtml(c.type)}</td>
+      <td style="font-size:13px;color:var(--text-muted)">${c.due || '—'}</td>
+    </tr>`).join('');
+}
+
+function renderIncidentSummary() {
+  const tbody = document.getElementById('incident-summary-tbody');
+  const recent = [...checkouts].reverse().slice(0, 8);
+  if (!recent.length) {
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted)">No incidents</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = recent.map(c => `
+    <tr>
+      <td style="font-size:13px">${c.studentName}</td>
+      <td>${badgeHtml(c.type)}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${c.date}</td>
+    </tr>`).join('');
+}
+
+function renderIncidents() {
+  const search = (document.getElementById('incident-search')?.value || '').toLowerCase();
+  const filter = document.getElementById('incident-filter')?.value || '';
+  const tbody  = document.getElementById('incident-tbody');
+  if (!tbody) return;
+
+  let rows = [...checkouts].reverse().filter(c => {
+    const matchText = !search || [c.studentName, c.assetTag, c.serial, c.studentId].some(v => v && v.toLowerCase().includes(search));
+    const matchType = !filter || c.type === filter;
+    return matchText && matchType;
+  });
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:2rem;color:var(--text-muted)">No records found</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map(c => `
+    <tr>
+      <td style="font-size:12px;color:var(--text-muted)">${c.id}</td>
+      <td>${c.studentName}<br><span style="font-size:11px;color:var(--text-muted)">${c.building||''}</span></td>
+      <td style="font-size:13px">${c.grade || '—'}</td>
+      <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 5px;border-radius:4px;">${c.assetTag}</code></td>
+      <td style="font-size:12px;color:var(--text-muted)">${c.serial||'—'}</td>
+      <td>${badgeHtml(c.type)}</td>
+      <td style="font-size:12px">${c.date}</td>
+      <td style="font-size:12px">${c.due||'—'}</td>
+      <td>${statusBadge(c.status)}</td>
+      <td>
+        <div class="actions">
+          ${c.status === 'Active' ? `<button class="btn btn-success btn-sm" onclick="returnDevice(${c.id})">Return</button>` : ''}
+          <button class="btn btn-danger btn-sm" onclick="deleteRecord(${c.id})">✕</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function renderInventory() {
+  const search = (document.getElementById('inv-search')?.value || '').toLowerCase();
+  const tbody  = document.getElementById('inventory-tbody');
+  if (!tbody) return;
+
+  const rows = inventory.filter(d =>
+    !search || [d.assetTag, d.model, d.serial].some(v => v && v.toLowerCase().includes(search))
+  );
+
+  tbody.innerHTML = rows.map(d => `
+    <tr>
+      <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${d.assetTag}</code></td>
+      <td style="font-size:13px">${d.model}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${d.serial}</td>
+      <td><span class="badge ${d.status==='Available'?'badge-active':'badge-returned'}">${d.status}</span></td>
+      <td>
+        <button class="btn btn-danger btn-sm" onclick="removeDevice('${d.assetTag}')">Remove</button>
+      </td>
+    </tr>`).join('');
+}
+
+function renderAvailable() {
+  const tbody = document.getElementById('available-tbody');
+  if (!tbody) return;
+  const avail = inventory.filter(d => d.status === 'Available');
+  if (!avail.length) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">No devices available</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = avail.map(d => `
+    <tr>
+      <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${d.assetTag}</code></td>
+      <td style="font-size:13px">${d.model}</td>
+      <td><span class="badge badge-active">Available</span></td>
+      <td><button class="btn btn-secondary btn-sm" onclick="prefillDevice('${d.assetTag}','${d.serial}')">Select</button></td>
+    </tr>`).join('');
+}
+
+function prefillDevice(tag, serial) {
+  document.getElementById('co-asset').value  = tag;
+  document.getElementById('co-serial').value = serial;
+}
+
+function submitCheckout() {
+  const name     = document.getElementById('co-student-name').value.trim();
+  const sid      = document.getElementById('co-student-id').value.trim();
+  const grade    = document.getElementById('co-grade').value;
+  const building = document.getElementById('co-building').value;
+  const asset    = document.getElementById('co-asset').value.trim();
+  const serial   = document.getElementById('co-serial').value.trim();
+  const type     = document.getElementById('co-type').value;
+  const due      = document.getElementById('co-due').value;
+  const notes    = document.getElementById('co-notes').value.trim();
+
+  if (!name || !asset || !type) {
+    showToast('Student name, asset tag, and type are required.', 'error');
+    return;
+  }
+
+  const today = new Date().toLocaleDateString('en-US');
+  const record = { id: nextId++, studentName: name, studentId: sid, grade, building, assetTag: asset, serial, type, date: today, due, notes, status: 'Active' };
+
+  checkouts.push(record);
+
+  const dev = inventory.find(d => d.assetTag === asset);
+  if (dev) dev.status = 'On Loan';
+
+  save();
+  sendToSheet(record);
+  clearCheckoutForm();
+  refreshAll();
+  showToast('Checkout saved!', 'success');
+}
+
+function returnDevice(id) {
+  const rec = checkouts.find(c => c.id === id);
+  if (!rec) return;
+  rec.status = 'Returned';
+  rec.returnDate = new Date().toLocaleDateString('en-US');
+  const dev = inventory.find(d => d.assetTag === rec.assetTag);
+  if (dev) dev.status = 'Available';
+  save();
+  refreshAll();
+  sendReturnToSheet(rec);
+  showToast('Device marked as returned.', 'success');
+}
+
+function deleteRecord(id) {
+  if (!confirm('Delete this record?')) return;
+  checkouts = checkouts.filter(c => c.id !== id);
+  save();
+  refreshAll();
+  showToast('Record deleted.');
+}
+
+function addDevice() {
+  const asset  = document.getElementById('inv-asset').value.trim();
+  const serial = document.getElementById('inv-serial').value.trim();
+  const model  = document.getElementById('inv-model').value;
+  if (!asset) { showToast('Asset tag required.', 'error'); return; }
+  if (inventory.find(d => d.assetTag === asset)) { showToast('Asset tag already exists.', 'error'); return; }
+  inventory.push({ assetTag: asset, serial, model, status: 'Available' });
+  save();
+  renderInventory();
+  renderAvailable();
+  renderStats();
+  document.getElementById('inv-asset').value  = '';
+  document.getElementById('inv-serial').value = '';
+  showToast('Device added!', 'success');
+}
+
+function removeDevice(tag) {
+  if (!confirm('Remove device ' + tag + '?')) return;
+  inventory = inventory.filter(d => d.assetTag !== tag);
+  save();
+  renderInventory();
+  renderStats();
+  showToast('Device removed.');
+}
+
+function openAddDevice() {
+  const f = document.getElementById('add-device-form');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+function clearCheckoutForm() {
+  ['co-student-name','co-student-id','co-asset','co-serial','co-notes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('co-grade').value = '';
+  document.getElementById('co-building').value = '';
+  document.getElementById('co-type').value = 'Forgot Device';
+  document.getElementById('co-due').value = '';
+}
+
+function exportCSV() {
+  const headers = ['ID','Student Name','Student ID','Grade','Building','Asset Tag','Serial','Type','Date','Due Back','Status','Notes'];
+  const rows    = checkouts.map(c => [c.id, c.studentName, c.studentId||'', c.grade||'', c.building||'', c.assetTag, c.serial||'', c.type, c.date, c.due||'', c.status, c.notes||'']);
+  const csv     = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'loaner-records-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  showToast('CSV exported!', 'success');
+}
+
+async function sendToSheet(record) {
+  if (SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
+  try {
+    await fetch(SHEET_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'checkout', ...record })
+    });
+  } catch(e) { console.warn('Sheet sync failed:', e); }
+}
+
+async function sendReturnToSheet(record) {
+  if (SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
+  try {
+    await fetch(SHEET_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'return', id: record.id, returnDate: record.returnDate })
+    });
+  } catch(e) { console.warn('Sheet sync failed:', e); }
+}
+
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleString('en-US', { dateStyle:'medium', timeStyle:'short' });
+}
+
+setInterval(updateClock, 1000);
+updateClock();
+
+const today = new Date().toISOString().slice(0,10);
+document.getElementById('co-due').value = today;
+
+refreshAll();
+</script>
+</body>
+</html>

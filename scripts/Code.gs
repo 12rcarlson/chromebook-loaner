@@ -4,22 +4,37 @@
  * Deploy as a Web App (Execute as: Me, Access: Anyone)
  * Paste the Web App URL into index.html → SHEET_URL
  *
- * Sheet tabs created automatically:
+ * Sheet tabs:
  *   "Checkouts"  — one row per loaner transaction
  *   "Inventory"  — loaner device pool
  *   "Log"        — raw request log
  */
 
-const SPREADSHEET_ID = '1jgE9Qt7-lsntIIxjake_Plh2eUwj2P3TkHaORgSzxvA'; // ← paste your Sheet ID
+const SPREADSHEET_ID  = '1jgE9Qt7-lsntIIxjake_Plh2eUwj2P3TkHaORgSzxvA';
 const CHECKOUT_SHEET  = 'Checkouts';
 const INVENTORY_SHEET = 'Inventory';
 const LOG_SHEET       = 'Log';
+
+const CHECKOUT_HEADERS = [
+  'ID', 'Student Name', 'Grade', 'Building',
+  'Asset Tag', 'Serial Number', 'Incident Type', 'Damaged Part',
+  'Date Checked Out', 'Due Back', 'Status', 'Return Date', 'Notes'
+];
 
 // ─── Entry points ────────────────────────────────────────────────────────────
 
 function doPost(e) {
   try {
-    const data   = JSON.parse(e.postData.contents);
+    // Supports both FormData (payload param) and raw JSON body
+    let data;
+    if (e.parameter && e.parameter.payload) {
+      data = JSON.parse(e.parameter.payload);
+    } else if (e.postData && e.postData.contents) {
+      data = JSON.parse(e.postData.contents);
+    } else {
+      throw new Error('No data received');
+    }
+
     logRequest(data);
 
     if (data.action === 'checkout') {
@@ -40,7 +55,39 @@ function doPost(e) {
 }
 
 function doGet(e) {
-  // Allow fetching all checkouts for reporting
+  const action = e.parameter && e.parameter.action;
+
+  // Handle checkout sync via GET params
+  if (action === 'checkout') {
+    try {
+      appendCheckout(e.parameter);
+      logRequest(e.parameter);
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: 'ok' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    } catch(err) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: 'error', message: err.message }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  // Handle return sync via GET params
+  if (action === 'return') {
+    try {
+      markReturned(e.parameter.id, e.parameter.returnDate);
+      logRequest(e.parameter);
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: 'ok' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    } catch(err) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: 'error', message: err.message }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  // Default: return all checkouts for reporting
   const ss     = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet  = getOrCreateSheet(ss, CHECKOUT_SHEET);
   const values = sheet.getDataRange().getValues();
@@ -55,21 +102,17 @@ function appendCheckout(d) {
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, CHECKOUT_SHEET);
 
-  ensureHeaders(sheet, [
-    'ID', 'Student Name', 'Student ID', 'Grade', 'Building',
-    'Asset Tag', 'Serial Number', 'Incident Type',
-    'Date Checked Out', 'Due Back', 'Status', 'Return Date', 'Notes'
-  ]);
+  ensureHeaders(sheet, CHECKOUT_HEADERS);
 
   sheet.appendRow([
     d.id,
     d.studentName  || '',
-    d.studentId    || '',
     d.grade        || '',
     d.building     || '',
     d.assetTag     || '',
     d.serial       || '',
     d.type         || '',
+    d.damagedPart  || '',
     d.date         || '',
     d.due          || '',
     'Active',
@@ -86,10 +129,15 @@ function markReturned(id, returnDate) {
   const sheet = getOrCreateSheet(ss, CHECKOUT_SHEET);
   const data  = sheet.getDataRange().getValues();
 
+  // Find Status column dynamically from header row
+  const headers   = data[0];
+  const statusCol = headers.indexOf('Status') + 1;
+  const returnCol = headers.indexOf('Return Date') + 1;
+
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]) === String(id)) {
-      sheet.getRange(i + 1, 11).setValue('Returned');     // Status col
-      sheet.getRange(i + 1, 12).setValue(returnDate);     // Return Date col
+      if (statusCol) sheet.getRange(i + 1, statusCol).setValue('Returned');
+      if (returnCol) sheet.getRange(i + 1, returnCol).setValue(returnDate);
       break;
     }
   }
@@ -123,9 +171,8 @@ function formatLastRow(sheet) {
 }
 
 function conditionalFormat(sheet) {
-  // Color-code the Status column (col 11) — only set once
   const rules = sheet.getConditionalFormatRules();
-  if (rules.length > 0) return; // already applied
+  if (rules.length > 0) return;
 
   const range = sheet.getRange('K2:K1000');
 
@@ -155,22 +202,37 @@ function getOrCreateSheet(ss, name) {
 function setupSpreadsheet() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
-  // Checkouts sheet
   const cs = getOrCreateSheet(ss, CHECKOUT_SHEET);
-  ensureHeaders(cs, [
-    'ID', 'Student Name', 'Student ID', 'Grade', 'Building',
-    'Asset Tag', 'Serial Number', 'Incident Type',
-    'Date Checked Out', 'Due Back', 'Status', 'Return Date', 'Notes'
-  ]);
-  cs.setColumnWidths(1, 13, 120);
+  ensureHeaders(cs, CHECKOUT_HEADERS);
+  cs.setColumnWidths(1, CHECKOUT_HEADERS.length, 130);
   cs.setColumnWidth(2, 160);
-  cs.setColumnWidth(5, 200);
+  cs.setColumnWidth(4, 220);
 
-  // Inventory sheet
   const inv = getOrCreateSheet(ss, INVENTORY_SHEET);
   ensureHeaders(inv, ['Asset Tag', 'Serial Number', 'Model', 'Status', 'Notes']);
   inv.setColumnWidths(1, 5, 150);
 
   SpreadsheetApp.flush();
   Logger.log('Setup complete.');
+}
+
+// ─── Fix existing sheet headers (run once if you already have data) ──────────
+
+function updateCheckoutHeaders() {
+  const ss      = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet   = getOrCreateSheet(ss, CHECKOUT_SHEET);
+  const lastCol = CHECKOUT_HEADERS.length;
+
+  const headerRange = sheet.getRange(1, 1, 1, lastCol);
+  headerRange.setValues([CHECKOUT_HEADERS]);
+  headerRange.setFontWeight('bold');
+  headerRange.setBackground('#1a56a0');
+  headerRange.setFontColor('#ffffff');
+  sheet.setFrozenRows(1);
+  sheet.setColumnWidths(1, lastCol, 130);
+  sheet.setColumnWidth(2, 160);
+  sheet.setColumnWidth(4, 220);
+
+  SpreadsheetApp.flush();
+  Logger.log('Headers updated.');
 }

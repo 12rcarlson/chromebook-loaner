@@ -151,7 +151,7 @@
       font-weight: 600;
     }
 
-    .card-body { padding: 1.5rem; }
+    .card-body { padding: 1.75rem 2rem; }
 
     .form-grid {
       display: grid;
@@ -356,6 +356,11 @@
     .toast.success { background: #085041; }
     .toast.error { background: var(--danger); }
 
+    input[type="date"] {
+      padding-right: 14px;
+      min-width: 160px;
+    }
+
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
 
     .incident-type-tabs {
@@ -379,6 +384,40 @@
     .type-tab.active-forgot { background: var(--warning-light); border-color: #f9c75e; color: var(--warning); }
     .type-tab.active-repair { background: var(--danger-light); border-color: #f09595; color: var(--danger); }
     .type-tab.active-lost   { background: #fbeaf0; border-color: #ed93b1; color: #993556; }
+
+    td.editable {
+      cursor: pointer;
+      position: relative;
+    }
+    td.editable:hover {
+      background: var(--primary-light) !important;
+    }
+    td.editable .edit-hint {
+      display: none;
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-left: 4px;
+      opacity: 0.6;
+    }
+    td.editable:hover .edit-hint { display: inline; }
+
+    .cell-editor {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      min-width: 120px;
+      height: 100%;
+      padding: 0 8px;
+      font-size: 13px;
+      font-family: inherit;
+      border: 2px solid var(--primary);
+      border-radius: 0;
+      background: var(--bg);
+      color: var(--text);
+      z-index: 20;
+      box-shadow: 0 2px 8px rgba(26,86,160,0.18);
+    }
+    .cell-editor:focus { outline: none; }
 
     @media (max-width: 700px) {
       .stats-bar { grid-template-columns: 1fr 1fr; }
@@ -633,7 +672,7 @@
       </div>
       <table>
         <thead>
-          <tr><th>Asset Tag</th><th>Model</th><th>Serial</th><th>Building</th><th>Status</th><th>Actions</th></tr>
+          <tr><th>Asset Tag ✎</th><th>Model ✎</th><th>Serial ✎</th><th>Building ✎</th><th>Status ✎</th><th>Actions</th></tr>
         </thead>
         <tbody id="inventory-tbody"></tbody>
       </table>
@@ -709,7 +748,7 @@
       </div>
       <table>
         <thead>
-          <tr><th>Asset Tag</th><th>Model</th><th>Serial</th><th>Building</th><th>Assigned To</th><th>Status</th><th></th></tr>
+          <tr><th>Asset Tag ✎</th><th>Model ✎</th><th>Serial ✎</th><th>Building ✎</th><th>Assigned To ✎</th><th>Status ✎</th><th></th></tr>
         </thead>
         <tbody id="all-inventory-tbody"></tbody>
       </table>
@@ -721,7 +760,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbzvBrK3_CNCZ81yXveTcKOtXrV1cpQuXsyts5gqXmev83Vi5dWYph7-Gwax3zk7Cn4X/exec';
+const SHEET_URL = 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
 
 let checkouts    = JSON.parse(localStorage.getItem('checkouts') || '[]');
 let inventory    = JSON.parse(localStorage.getItem('inventory') || JSON.stringify([
@@ -862,6 +901,11 @@ function renderIncidents() {
     </tr>`).join('');
 }
 
+function loanerStatusBadge(s) {
+  const cls = s === 'Available' ? 'badge-active' : s === 'On Loan' ? 'badge-returned' : 'badge-repair';
+  return `<span class="badge ${cls}">${s}</span>`;
+}
+
 function renderLoaners() {
   const search = (document.getElementById('inv-search')?.value || '').toLowerCase();
   const filter = document.getElementById('inv-status-filter')?.value || '';
@@ -876,13 +920,26 @@ function renderLoaners() {
   const countEl = document.getElementById('inv-count');
   if (countEl) countEl.textContent = `${rows.length.toLocaleString()} of ${inventory.length.toLocaleString()} devices`;
 
+  const LOANER_STATUSES = ['Available','On Loan','Loaner','Daily Loaner','Needs Repair'];
+  const BUILDINGS = ['Bureau Valley High School','Bureau Valley Elementary and Junior High','Bureau Valley Elementary-Wyanet','Bureau Valley North'];
+
   tbody.innerHTML = rows.slice(0, 200).map(d => `
     <tr>
-      <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${d.assetTag}</code></td>
-      <td style="font-size:13px">${d.model}</td>
-      <td style="font-size:12px;color:var(--text-muted)">${d.serial}</td>
-      <td style="font-size:12px;color:var(--text-muted)">${d.building||'—'}</td>
-      <td><span class="badge ${d.status==='Available'?'badge-active':d.status==='On Loan'?'badge-returned':'badge-repair'}">${d.status}</span></td>
+      <td class="editable" onclick="startCellEdit(this,'loaner','assetTag','${d.assetTag}','text')">
+        <code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${d.assetTag}</code><span class="edit-hint">✎</span>
+      </td>
+      <td class="editable" onclick="startCellEdit(this,'loaner','model','${d.assetTag}','text')">
+        <span style="font-size:13px">${d.model}</span><span class="edit-hint">✎</span>
+      </td>
+      <td class="editable" onclick="startCellEdit(this,'loaner','serial','${d.assetTag}','text')">
+        <span style="font-size:12px;color:var(--text-muted)">${d.serial||''}</span><span class="edit-hint">✎</span>
+      </td>
+      <td class="editable" onclick="startCellEdit(this,'loaner','building','${d.assetTag}','select',${JSON.stringify(BUILDINGS)})">
+        <span style="font-size:12px;color:var(--text-muted)">${d.building||'—'}</span><span class="edit-hint">✎</span>
+      </td>
+      <td class="editable" onclick="startCellEdit(this,'loaner','status','${d.assetTag}','select',${JSON.stringify(LOANER_STATUSES)})">
+        ${loanerStatusBadge(d.status)}<span class="edit-hint">✎</span>
+      </td>
       <td><button class="btn btn-danger btn-sm" onclick="removeDevice('${d.assetTag}')">Remove</button></td>
     </tr>`).join('');
 
@@ -916,20 +973,34 @@ function renderAllInventory() {
     return;
   }
 
-  tbody.innerHTML = rows.slice(0, 200).map(d => `
+  const ALL_STATUSES = ['Assigned','Unassigned','Loaner','Daily Loaner','Needs Repair','Forgot Device'];
+  const BUILDINGS    = ['Bureau Valley High School','Bureau Valley Elementary and Junior High','Bureau Valley Elementary-Wyanet','Bureau Valley North'];
+
+  tbody.innerHTML = rows.slice(0, 200).map(d => {
+    const statusCls = d.status==='Assigned' ? 'badge-returned' : d.status==='Unassigned' ? 'badge-active' : d.status==='Loaner'||d.status==='Daily Loaner' ? 'badge-active' : 'badge-repair';
+    return `
     <tr>
-      <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${d.assetTag}</code></td>
-      <td style="font-size:13px">${d.model}</td>
-      <td style="font-size:12px;color:var(--text-muted)">${d.serial}</td>
-      <td style="font-size:12px;color:var(--text-muted)">${d.building||'—'}</td>
-      <td style="font-size:12px;color:var(--text-muted)">${d.owner||'—'}</td>
-      <td><span class="badge ${
-        d.status==='Assigned'    ? 'badge-returned' :
-        d.status==='Unassigned'  ? 'badge-active'   :
-        d.status==='Loaner'||d.status==='Daily Loaner' ? 'badge-active' :
-        'badge-repair'}">${d.status}</span></td>
+      <td class="editable" onclick="startCellEdit(this,'all','assetTag','${d.assetTag}','text')">
+        <code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${d.assetTag}</code><span class="edit-hint">✎</span>
+      </td>
+      <td class="editable" onclick="startCellEdit(this,'all','model','${d.assetTag}','text')">
+        <span style="font-size:13px">${d.model}</span><span class="edit-hint">✎</span>
+      </td>
+      <td class="editable" onclick="startCellEdit(this,'all','serial','${d.assetTag}','text')">
+        <span style="font-size:12px;color:var(--text-muted)">${d.serial||''}</span><span class="edit-hint">✎</span>
+      </td>
+      <td class="editable" onclick="startCellEdit(this,'all','building','${d.assetTag}','select',${JSON.stringify(BUILDINGS)})">
+        <span style="font-size:12px;color:var(--text-muted)">${d.building||'—'}</span><span class="edit-hint">✎</span>
+      </td>
+      <td class="editable" onclick="startCellEdit(this,'all','owner','${d.assetTag}','text')">
+        <span style="font-size:12px;color:var(--text-muted)">${d.owner||'—'}</span><span class="edit-hint">✎</span>
+      </td>
+      <td class="editable" onclick="startCellEdit(this,'all','status','${d.assetTag}','select',${JSON.stringify(ALL_STATUSES)})">
+        <span class="badge ${statusCls}">${d.status}</span><span class="edit-hint">✎</span>
+      </td>
       <td><button class="btn btn-danger btn-sm" onclick="removeAllInvDevice('${d.assetTag}')">Delete</button></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   if (rows.length > 200) {
     tbody.innerHTML += `<tr><td colspan="7" style="text-align:center;padding:1rem;color:var(--text-muted);font-size:13px;">Showing 200 of ${rows.length.toLocaleString()} — use search or filters to narrow results</td></tr>`;
@@ -1201,7 +1272,7 @@ function clearCheckoutForm() {
   document.getElementById('co-grade').value = '';
   document.getElementById('co-building').value = '';
   document.getElementById('co-type').value = 'Forgot Device';
-  document.getElementById('co-due').value = '';
+  document.getElementById('co-due').value = getTomorrow();
   document.getElementById('co-damaged-part').value = '';
   document.getElementById('damaged-part-section').style.display = 'none';
   document.getElementById('other-text-group').style.display = 'none';
@@ -1251,6 +1322,85 @@ async function sendReturnToSheet(record) {
   } catch(e) { console.warn('Sheet sync failed:', e); }
 }
 
+// ── Inline cell editing ───────────────────────────────────────────────────────
+
+function startCellEdit(td, store, field, assetTag, inputType, options) {
+  // Don't open a second editor if one is already open on this cell
+  if (td.querySelector('.cell-editor')) return;
+
+  const dataArr = store === 'loaner' ? inventory : allInventory;
+  const rec = dataArr.find(d => d.assetTag === assetTag);
+  if (!rec) return;
+
+  const currentVal = rec[field] || '';
+
+  // Hide existing display content
+  Array.from(td.childNodes).forEach(n => { if (n.nodeType === 1) n.style.display = 'none'; });
+
+  let editor;
+  if (inputType === 'select' && options) {
+    editor = document.createElement('select');
+    editor.className = 'cell-editor';
+    options.forEach(opt => {
+      const o = document.createElement('option');
+      o.value = opt; o.textContent = opt;
+      if (opt === currentVal) o.selected = true;
+      editor.appendChild(o);
+    });
+  } else {
+    editor = document.createElement('input');
+    editor.type = 'text';
+    editor.className = 'cell-editor';
+    editor.value = currentVal;
+  }
+
+  td.appendChild(editor);
+  editor.focus();
+  if (editor.tagName === 'INPUT') { editor.select(); }
+
+  function commit() {
+    const newVal = editor.value;
+    // If assetTag field changed, update the key used for lookup
+    const oldTag = rec.assetTag;
+    rec[field] = newVal;
+
+    // If the assetTag itself was edited, we need to re-key any checkouts referencing it
+    if (field === 'assetTag' && store === 'loaner') {
+      checkouts.forEach(c => { if (c.assetTag === oldTag) c.assetTag = newVal; });
+    }
+
+    save();
+    if (store === 'loaner') renderLoaners();
+    else renderAllInventory();
+    renderStats();
+    showToast('Saved.', 'success');
+  }
+
+  function cancel() {
+    // Restore display, remove editor
+    Array.from(td.childNodes).forEach(n => {
+      if (n === editor) { td.removeChild(n); }
+      else if (n.nodeType === 1) { n.style.display = ''; }
+    });
+  }
+
+  editor.addEventListener('blur', function() {
+    commit();
+  });
+
+  editor.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { editor.blur(); }
+    if (e.key === 'Escape') { editor.removeEventListener('blur', commit); cancel(); }
+  });
+
+  // For selects, commit immediately on change
+  if (inputType === 'select') {
+    editor.addEventListener('change', function() { editor.blur(); });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function showToast(msg, type='') {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -1281,8 +1431,13 @@ function toggleOtherText() {
   document.getElementById('other-text-group').style.display = val === 'Other' ? 'block' : 'none';
 }
 
-const today = new Date().toISOString().slice(0,10);
-document.getElementById('co-due').value = today;
+function getTomorrow() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+document.getElementById('co-due').value = getTomorrow();
 
 refreshAll();
 </script>

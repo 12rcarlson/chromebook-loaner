@@ -609,13 +609,36 @@
   <div id="page-inventory" class="page">
     <h1 class="section-heading">Loaner Inventory</h1>
     <div class="search-bar">
-      <input type="text" id="inv-search" placeholder="Search asset tag or model..." oninput="renderInventory()" />
-      <button class="btn btn-primary" onclick="openAddDevice()">+ Add Device</button>
+      <input type="text" id="inv-search" placeholder="Search asset tag, model, or building..." oninput="renderInventory()" />
+      <select id="inv-status-filter" onchange="renderInventory()" style="width:160px;">
+        <option value="">All Statuses</option>
+        <option>Available</option>
+        <option>On Loan</option>
+        <option>Assigned</option>
+        <option>Unassigned</option>
+        <option>Loaner</option>
+        <option>Daily Loaner</option>
+        <option>Needs Repair</option>
+        <option>Forgot Device</option>
+      </select>
+      <button class="btn btn-secondary" onclick="openAddDevice()">+ Add Device</button>
+      <button class="btn btn-primary" onclick="document.getElementById('csv-import-input').click()">⬆ Import CSV</button>
+      <input type="file" id="csv-import-input" accept=".csv" style="display:none" onchange="importCSV(event)" />
     </div>
+
+    <!-- Import status bar -->
+    <div id="import-status" style="display:none; margin-bottom:1rem; padding:12px 16px; border-radius:8px; font-size:14px; background:var(--accent-light); color:#085041; border:1px solid #9fe1cb;">
+      <span id="import-status-text"></span>
+    </div>
+
     <div class="card">
+      <div style="padding:10px 14px; background:var(--bg-surface); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+        <span style="font-size:13px; color:var(--text-muted);" id="inv-count">0 devices</span>
+        <button class="btn btn-danger btn-sm" onclick="clearInventory()">Clear All</button>
+      </div>
       <table>
         <thead>
-          <tr><th>Asset Tag</th><th>Model</th><th>Serial</th><th>Status</th><th>Actions</th></tr>
+          <tr><th>Asset Tag</th><th>Model</th><th>Serial</th><th>Building</th><th>Status</th><th>Actions</th></tr>
         </thead>
         <tbody id="inventory-tbody"></tbody>
       </table>
@@ -624,7 +647,7 @@
     <!-- Add device form -->
     <div id="add-device-form" style="display:none; margin-top:1.5rem;">
       <div class="card">
-        <div class="card-header"><h2>Add Loaner Device</h2></div>
+        <div class="card-header"><h2>Add Single Device</h2></div>
         <div class="card-body">
           <div class="form-grid">
             <div class="form-group">
@@ -635,16 +658,18 @@
               <label>Serial Number</label>
               <input type="text" id="inv-serial" placeholder="e.g. 5CD122DN6N" />
             </div>
-            <div class="form-group full">
+            <div class="form-group">
               <label>Model</label>
-              <select id="inv-model">
-                <option>HP Chromebook 14</option>
-                <option>HP Chromebook 14 G5 (Intel)</option>
-                <option>HP Chromebook 14A G5</option>
-                <option>Lenovo 100e Chromebook 2nd Gen MTK</option>
-                <option>Lenovo N22 Chromebook</option>
-                <option>ASUS Chromebook C523NA</option>
-                <option>Other</option>
+              <input type="text" id="inv-model" placeholder="e.g. HP Chromebook 14 G5" />
+            </div>
+            <div class="form-group">
+              <label>Building</label>
+              <select id="inv-building">
+                <option value="">Select building</option>
+                <option>Bureau Valley High School</option>
+                <option>Bureau Valley Elementary and Junior High</option>
+                <option>Bureau Valley Elementary-Wyanet</option>
+                <option>Bureau Valley North</option>
               </select>
             </div>
           </div>
@@ -798,23 +823,33 @@ function renderIncidents() {
 
 function renderInventory() {
   const search = (document.getElementById('inv-search')?.value || '').toLowerCase();
+  const filter = document.getElementById('inv-status-filter')?.value || '';
   const tbody  = document.getElementById('inventory-tbody');
   if (!tbody) return;
 
   const rows = inventory.filter(d =>
-    !search || [d.assetTag, d.model, d.serial].some(v => v && v.toLowerCase().includes(search))
+    (!search || [d.assetTag, d.model, d.serial, d.building].some(v => v && v.toLowerCase().includes(search))) &&
+    (!filter || d.status === filter)
   );
 
-  tbody.innerHTML = rows.map(d => `
+  const countEl = document.getElementById('inv-count');
+  if (countEl) countEl.textContent = `${rows.length.toLocaleString()} of ${inventory.length.toLocaleString()} devices`;
+
+  tbody.innerHTML = rows.slice(0, 200).map(d => `
     <tr>
       <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${d.assetTag}</code></td>
       <td style="font-size:13px">${d.model}</td>
       <td style="font-size:12px;color:var(--text-muted)">${d.serial}</td>
-      <td><span class="badge ${d.status==='Available'?'badge-active':'badge-returned'}">${d.status}</span></td>
+      <td style="font-size:12px;color:var(--text-muted)">${d.building||'—'}</td>
+      <td><span class="badge ${d.status==='Available'||d.status==='Unassigned'?'badge-active':d.status==='On Loan'||d.status==='Assigned'?'badge-returned':'badge-repair'}">${d.status}</span></td>
       <td>
         <button class="btn btn-danger btn-sm" onclick="removeDevice('${d.assetTag}')">Remove</button>
       </td>
     </tr>`).join('');
+
+  if (rows.length > 200) {
+    tbody.innerHTML += `<tr><td colspan="6" style="text-align:center;padding:1rem;color:var(--text-muted);font-size:13px;">Showing 200 of ${rows.length} — use search to filter</td></tr>`;
+  }
 }
 
 function renderAvailable() {
@@ -894,18 +929,20 @@ function deleteRecord(id) {
 }
 
 function addDevice() {
-  const asset  = document.getElementById('inv-asset').value.trim();
-  const serial = document.getElementById('inv-serial').value.trim();
-  const model  = document.getElementById('inv-model').value;
+  const asset    = document.getElementById('inv-asset').value.trim();
+  const serial   = document.getElementById('inv-serial').value.trim();
+  const model    = document.getElementById('inv-model').value.trim();
+  const building = document.getElementById('inv-building').value;
   if (!asset) { showToast('Asset tag required.', 'error'); return; }
   if (inventory.find(d => d.assetTag === asset)) { showToast('Asset tag already exists.', 'error'); return; }
-  inventory.push({ assetTag: asset, serial, model, status: 'Available' });
+  inventory.push({ assetTag: asset, serial, model, building, status: 'Available' });
   save();
   renderInventory();
   renderAvailable();
   renderStats();
   document.getElementById('inv-asset').value  = '';
   document.getElementById('inv-serial').value = '';
+  document.getElementById('inv-model').value  = '';
   showToast('Device added!', 'success');
 }
 
@@ -916,6 +953,108 @@ function removeDevice(tag) {
   renderInventory();
   renderStats();
   showToast('Device removed.');
+}
+
+function importCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const lines  = e.target.result.split('\n').filter(l => l.trim());
+    const header = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+
+    // Map TDT column names → our fields
+    const idx = {
+      assetTag : header.findIndex(h => h === 'AssetTag'),
+      serial   : header.findIndex(h => h === 'SerialNumber'),
+      mfr      : header.findIndex(h => h === 'Manufacturer'),
+      model    : header.findIndex(h => h === 'ModelNumber'),
+      building : header.findIndex(h => h === 'DeviceBuilding'),
+      status   : header.findIndex(h => h === 'DeviceStatus'),
+    };
+
+    // Fallback for simple CSV with just our own columns
+    if (idx.assetTag === -1) idx.assetTag = header.findIndex(h => /asset.?tag/i.test(h));
+    if (idx.serial   === -1) idx.serial   = header.findIndex(h => /serial/i.test(h));
+    if (idx.model    === -1) idx.model    = header.findIndex(h => /model/i.test(h));
+
+    if (idx.assetTag === -1) {
+      showImportStatus('Could not find AssetTag column. Is this a TDT export?', 'error');
+      return;
+    }
+
+    function parseRow(line) {
+      const cols = [];
+      let cur = '', inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') { inQ = !inQ; }
+        else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
+        else { cur += ch; }
+      }
+      cols.push(cur.trim());
+      return cols;
+    }
+
+    let added = 0, skipped = 0, dupes = 0;
+    const existing = new Set(inventory.map(d => d.assetTag));
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols    = parseRow(lines[i]);
+      const status  = idx.status !== -1 ? cols[idx.status]?.trim() : '';
+      if (status === 'Decommissioned') { skipped++; continue; }
+
+      const assetTag = cols[idx.assetTag]?.trim();
+      if (!assetTag) { skipped++; continue; }
+      if (existing.has(assetTag)) { dupes++; continue; }
+
+      const mfrName  = idx.mfr !== -1 ? cols[idx.mfr]?.trim() : '';
+      const modelNum = idx.model !== -1 ? cols[idx.model]?.trim() : '';
+      const model    = mfrName ? `${mfrName} ${modelNum}`.trim() : modelNum;
+
+      inventory.push({
+        assetTag,
+        serial   : idx.serial !== -1 ? cols[idx.serial]?.trim() : '',
+        model    : model || 'Unknown',
+        building : idx.building !== -1 ? cols[idx.building]?.trim() : '',
+        status   : status || 'Unassigned',
+      });
+      existing.add(assetTag);
+      added++;
+    }
+
+    save();
+    refreshAll();
+    showImportStatus(`✓ Imported ${added.toLocaleString()} devices. ${dupes > 0 ? dupes + ' duplicates skipped. ' : ''}${skipped > 0 ? skipped + ' decommissioned skipped.' : ''}`, 'success');
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function showImportStatus(msg, type) {
+  const el = document.getElementById('import-status');
+  const txt = document.getElementById('import-status-text');
+  el.style.display = 'block';
+  txt.textContent  = msg;
+  if (type === 'error') {
+    el.style.background = 'var(--danger-light)';
+    el.style.color      = 'var(--danger)';
+    el.style.border     = '1px solid #f09595';
+  } else {
+    el.style.background = 'var(--accent-light)';
+    el.style.color      = '#085041';
+    el.style.border     = '1px solid #9fe1cb';
+  }
+  setTimeout(() => { el.style.display = 'none'; }, 6000);
+}
+
+function clearInventory() {
+  if (!confirm(`Clear all ${inventory.length.toLocaleString()} devices from inventory? This cannot be undone.`)) return;
+  inventory = [];
+  save();
+  refreshAll();
+  showToast('Inventory cleared.');
 }
 
 function openAddDevice() {

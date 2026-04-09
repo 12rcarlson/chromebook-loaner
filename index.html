@@ -565,7 +565,11 @@
               <input type="date" id="co-due" />
             </div>
             <div class="form-group full" id="damaged-part-section" style="display:none; background:var(--bg-surface); border:1px solid var(--border); border-radius:8px; padding:12px; gap:10px;">
-              <label style="font-size:13px; font-weight:600; color:var(--text);">Damaged Part</label>
+              <label style="font-size:13px; font-weight:600; color:var(--text);">Repair Details</label>
+              <div class="form-group" style="margin:0 0 10px 0;">
+                <label for="co-original-asset">Original Asset Tag <span style="font-size:11px; color:var(--text-muted); font-weight:400;">(device being left for repair)</span></label>
+                <input type="text" id="co-original-asset" placeholder="e.g. 3008" />
+              </div>
               <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:4px;">
                 <div class="form-group" style="margin:0;">
                   <label for="co-damaged-part">Part</label>
@@ -1038,9 +1042,10 @@ function submitCheckout() {
   const type        = document.getElementById('co-type').value;
   const due         = document.getElementById('co-due').value;
   const notes       = document.getElementById('co-notes').value.trim();
-  const damagedPart = document.getElementById('co-damaged-part').value;
-  const damagedOther= document.getElementById('co-damaged-other').value.trim();
-  const damaged     = damagedPart === 'Other' ? (damagedOther || 'Other') : damagedPart;
+  const damagedPart    = document.getElementById('co-damaged-part').value;
+  const damagedOther   = document.getElementById('co-damaged-other').value.trim();
+  const damaged        = damagedPart === 'Other' ? (damagedOther || 'Other') : damagedPart;
+  const originalAsset  = type === 'Needs Repair' ? document.getElementById('co-original-asset').value.trim() : '';
 
   if (!name || !asset || !type) {
     showToast('Student name, asset tag, and type are required.', 'error');
@@ -1048,7 +1053,7 @@ function submitCheckout() {
   }
 
   const today = new Date().toLocaleDateString('en-US');
-  const record = { id: nextId++, studentName: name, grade, building, assetTag: asset, serial, type, damagedPart: damaged, date: today, due, notes, status: 'Active' };
+  const record = { id: nextId++, studentName: name, grade, building, assetTag: asset, serial, type, damagedPart: damaged, originalAssetTag: originalAsset, date: today, due, notes, status: 'Active' };
 
   checkouts.push(record);
 
@@ -1268,7 +1273,7 @@ function openAddDevice() {
 }
 
 function clearCheckoutForm() {
-  ['co-student-name','co-asset','co-serial','co-notes','co-damaged-other'].forEach(id => document.getElementById(id).value = '');
+  ['co-student-name','co-asset','co-serial','co-notes','co-damaged-other','co-original-asset'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('co-grade').value = '';
   document.getElementById('co-building').value = '';
   document.getElementById('co-type').value = 'Forgot Device';
@@ -1279,8 +1284,8 @@ function clearCheckoutForm() {
 }
 
 function exportCSV() {
-  const headers = ['ID','Student Name','Grade','Building','Asset Tag','Serial','Type','Damaged Part','Date','Due Back','Status','Notes'];
-  const rows    = checkouts.map(c => [c.id, c.studentName, c.grade||'', c.building||'', c.assetTag, c.serial||'', c.type, c.damagedPart||'', c.date, c.due||'', c.status, c.notes||'']);
+  const headers = ['ID','Student Name','Grade','Building','Asset Tag','Serial','Type','Damaged Part','Original Asset Tag','Date','Due Back','Status','Notes'];
+  const rows    = checkouts.map(c => [c.id, c.studentName, c.grade||'', c.building||'', c.assetTag, c.serial||'', c.type, c.damagedPart||'', c.originalAssetTag||'', c.date, c.due||'', c.status, c.notes||'']);
   const csv     = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
@@ -1291,24 +1296,24 @@ function exportCSV() {
 
 async function sendToSheet(record) {
   if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') {
-    console.warn('SHEET_URL not configured — checkout not synced to Google Sheets.');
-    showToast('Sheet URL not set — data saved locally only.', 'error');
+    showToast('Sheet URL not set — saved locally only.', 'error');
     return;
   }
   try {
     const params = new URLSearchParams({
-      action      : 'checkout',
-      id          : record.id,
-      studentName : record.studentName || '',
-      grade       : record.grade       || '',
-      building    : record.building    || '',
-      assetTag    : record.assetTag    || '',
-      serial      : record.serial      || '',
-      type        : record.type        || '',
-      damagedPart : record.damagedPart || '',
-      date        : record.date        || '',
-      due         : record.due         || '',
-      notes       : record.notes       || ''
+      action          : 'checkout',
+      id              : record.id,
+      studentName     : record.studentName     || '',
+      grade           : record.grade           || '',
+      building        : record.building        || '',
+      assetTag        : record.assetTag        || '',
+      serial          : record.serial          || '',
+      type            : record.type            || '',
+      damagedPart     : record.damagedPart     || '',
+      originalAssetTag: record.originalAssetTag || '',
+      date            : record.date            || '',
+      due             : record.due             || '',
+      notes           : record.notes           || ''
     });
     const res  = await fetch(SHEET_URL + '?' + params.toString());
     const json = await res.json();
@@ -1325,10 +1330,7 @@ async function sendToSheet(record) {
 }
 
 async function sendReturnToSheet(record) {
-  if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') {
-    console.warn('SHEET_URL not configured — return not synced to Google Sheets.');
-    return;
-  }
+  if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
   try {
     const params = new URLSearchParams({
       action     : 'return',
@@ -1447,6 +1449,7 @@ function toggleDamagedPart() {
   const section = document.getElementById('damaged-part-section');
   section.style.display = type === 'Needs Repair' ? 'block' : 'none';
   if (type !== 'Needs Repair') {
+    document.getElementById('co-original-asset').value = '';
     document.getElementById('co-damaged-part').value = '';
     document.getElementById('co-damaged-other').value = '';
     document.getElementById('other-text-group').style.display = 'none';

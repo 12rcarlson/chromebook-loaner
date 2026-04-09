@@ -1,13 +1,13 @@
 /**
- * Chromebook Loaner System - Google Apps Script
+ * Chromebook Loaner System — Google Apps Script
  * -----------------------------------------------
  * Deploy as a Web App (Execute as: Me, Access: Anyone)
- * Paste the Web App URL into index.html -> SHEET_URL
+ * Paste the Web App URL into index.html → SHEET_URL
  *
  * Sheet tabs:
- *   "Checkouts"  - one row per loaner transaction
- *   "Inventory"  - loaner device pool
- *   "Log"        - raw request log
+ *   "Checkouts"  — one row per loaner transaction
+ *   "Inventory"  — loaner device pool
+ *   "Log"        — raw request log
  */
 
 const SPREADSHEET_ID  = '1jgE9Qt7-lsntIIxjake_Plh2eUwj2P3TkHaORgSzxvA';
@@ -17,22 +17,15 @@ const LOG_SHEET       = 'Log';
 
 const CHECKOUT_HEADERS = [
   'ID', 'Student Name', 'Grade', 'Building',
-  'Asset Tag', 'Serial Number', 'Incident Type', 'Damaged Part',
+  'Asset Tag', 'Serial Number', 'Incident Type', 'Damaged Part', 'Original Asset Tag',
   'Date Checked Out', 'Due Back', 'Status', 'Return Date', 'Notes'
 ];
 
-// --- Shared response helper --------------------------------------------------
-
-function jsonResponse(obj) {
-  return ContentService
-    .createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-// --- Entry points ------------------------------------------------------------
+// ─── Entry points ────────────────────────────────────────────────────────────
 
 function doPost(e) {
   try {
+    // Supports both FormData (payload param) and raw JSON body
     let data;
     if (e.parameter && e.parameter.payload) {
       data = JSON.parse(e.parameter.payload);
@@ -48,55 +41,62 @@ function doPost(e) {
       appendCheckout(data);
     } else if (data.action === 'return') {
       markReturned(data.id, data.returnDate);
-    } else {
-      throw new Error('Unknown action: ' + data.action);
     }
 
-    return jsonResponse({ status: 'ok', action: data.action, id: data.id || null });
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: 'ok' }))
+      .setMimeType(ContentService.MimeType.JSON);
 
   } catch (err) {
-    Logger.log('doPost error: ' + err.message);
-    return jsonResponse({ status: 'error', message: err.message });
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: 'error', message: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
   }
 }
 
 function doGet(e) {
   const action = e.parameter && e.parameter.action;
 
+  // Handle checkout sync via GET params
   if (action === 'checkout') {
     try {
       appendCheckout(e.parameter);
       logRequest(e.parameter);
-      return jsonResponse({ status: 'ok', action: 'checkout' });
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: 'ok' }))
+        .setMimeType(ContentService.MimeType.JSON);
     } catch(err) {
-      Logger.log('doGet checkout error: ' + err.message);
-      return jsonResponse({ status: 'error', message: err.message });
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: 'error', message: err.message }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
   }
 
+  // Handle return sync via GET params
   if (action === 'return') {
     try {
       markReturned(e.parameter.id, e.parameter.returnDate);
       logRequest(e.parameter);
-      return jsonResponse({ status: 'ok', action: 'return', id: e.parameter.id });
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: 'ok' }))
+        .setMimeType(ContentService.MimeType.JSON);
     } catch(err) {
-      Logger.log('doGet return error: ' + err.message);
-      return jsonResponse({ status: 'error', message: err.message });
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: 'error', message: err.message }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
   }
 
   // Default: return all checkouts for reporting
-  try {
-    const ss     = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet  = getOrCreateSheet(ss, CHECKOUT_SHEET);
-    const values = sheet.getDataRange().getValues();
-    return jsonResponse(values);
-  } catch(err) {
-    return jsonResponse({ status: 'error', message: err.message });
-  }
+  const ss     = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet  = getOrCreateSheet(ss, CHECKOUT_SHEET);
+  const values = sheet.getDataRange().getValues();
+  return ContentService
+    .createTextOutput(JSON.stringify(values))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
-// --- Sheet helpers -----------------------------------------------------------
+// ─── Sheet helpers ────────────────────────────────────────────────────────────
 
 function appendCheckout(d) {
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -112,9 +112,10 @@ function appendCheckout(d) {
     d.assetTag     || '',
     d.serial       || '',
     d.type         || '',
-    d.damagedPart  || '',
-    d.date         || '',
-    d.due          || '',
+    d.damagedPart      || '',
+    d.originalAssetTag || '',
+    d.date             || '',
+    d.due              || '',
     'Active',
     '',
     d.notes        || ''
@@ -129,6 +130,7 @@ function markReturned(id, returnDate) {
   const sheet = getOrCreateSheet(ss, CHECKOUT_SHEET);
   const data  = sheet.getDataRange().getValues();
 
+  // Find Status column dynamically from header row
   const headers   = data[0];
   const statusCol = headers.indexOf('Status') + 1;
   const returnCol = headers.indexOf('Return Date') + 1;
@@ -149,14 +151,10 @@ function logRequest(data) {
   sheet.appendRow([new Date().toISOString(), data.action || 'unknown', JSON.stringify(data)]);
 }
 
-// --- Formatting helpers ------------------------------------------------------
+// ─── Formatting helpers ───────────────────────────────────────────────────────
 
-// Always verify headers match - restores them if deleted or shifted
 function ensureHeaders(sheet, headers) {
-  const hasRows  = sheet.getLastRow() > 0;
-  const firstRow = hasRows ? sheet.getRange(1, 1, 1, headers.length).getValues()[0] : [];
-  const headersMatch = headers.every((h, i) => firstRow[i] === h);
-  if (!headersMatch) {
+  if (sheet.getLastRow() === 0) {
     const headerRange = sheet.getRange(1, 1, 1, headers.length);
     headerRange.setValues([headers]);
     headerRange.setFontWeight('bold');
@@ -173,8 +171,10 @@ function formatLastRow(sheet) {
   if (row % 2 === 0) range.setBackground('#f8f7f4');
 }
 
-// Always re-applies our rules, preserving any other rules on the sheet
 function conditionalFormat(sheet) {
+  const rules = sheet.getConditionalFormatRules();
+  if (rules.length > 0) return;
+
   const range = sheet.getRange('K2:K1000');
 
   const activeRule = SpreadsheetApp.newConditionalFormatRule()
@@ -191,21 +191,14 @@ function conditionalFormat(sheet) {
     .setRanges([range])
     .build();
 
-  const existing = sheet.getConditionalFormatRules().filter(r => {
-    const boolCond = r.getBooleanCondition();
-    if (!boolCond) return true;
-    const val = boolCond.getCriteriaValues()[0];
-    return val !== 'Active' && val !== 'Returned';
-  });
-
-  sheet.setConditionalFormatRules([...existing, activeRule, returnedRule]);
+  sheet.setConditionalFormatRules([activeRule, returnedRule]);
 }
 
 function getOrCreateSheet(ss, name) {
   return ss.getSheetByName(name) || ss.insertSheet(name);
 }
 
-// --- One-time setup (run manually once) -------------------------------------
+// ─── One-time setup (run manually once) ──────────────────────────────────────
 
 function setupSpreadsheet() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -224,7 +217,7 @@ function setupSpreadsheet() {
   Logger.log('Setup complete.');
 }
 
-// --- Fix existing sheet headers (run once if you already have data) ----------
+// ─── Fix existing sheet headers (run once if you already have data) ──────────
 
 function updateCheckoutHeaders() {
   const ss      = SpreadsheetApp.openById(SPREADSHEET_ID);

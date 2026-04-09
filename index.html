@@ -1221,20 +1221,33 @@ function exportCSV() {
 async function sendToSheet(record) {
   if (SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
   try {
-    const payload = JSON.stringify({ action: 'checkout', ...record });
-    const form = new FormData();
-    form.append('payload', payload);
-    await fetch(SHEET_URL, { method: 'POST', mode: 'no-cors', body: form });
+    const params = new URLSearchParams({
+      action      : 'checkout',
+      id          : record.id,
+      studentName : record.studentName || '',
+      grade       : record.grade       || '',
+      building    : record.building    || '',
+      assetTag    : record.assetTag    || '',
+      serial      : record.serial      || '',
+      type        : record.type        || '',
+      damagedPart : record.damagedPart || '',
+      date        : record.date        || '',
+      due         : record.due         || '',
+      notes       : record.notes       || ''
+    });
+    await fetch(SHEET_URL + '?' + params.toString(), { method: 'GET', mode: 'no-cors' });
   } catch(e) { console.warn('Sheet sync failed:', e); }
 }
 
 async function sendReturnToSheet(record) {
   if (SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
   try {
-    const payload = JSON.stringify({ action: 'return', id: record.id, returnDate: record.returnDate });
-    const form = new FormData();
-    form.append('payload', payload);
-    await fetch(SHEET_URL, { method: 'POST', mode: 'no-cors', body: form });
+    const params = new URLSearchParams({
+      action     : 'return',
+      id         : record.id,
+      returnDate : record.returnDate || ''
+    });
+    await fetch(SHEET_URL + '?' + params.toString(), { method: 'GET', mode: 'no-cors' });
   } catch(e) { console.warn('Sheet sync failed:', e); }
 }
 

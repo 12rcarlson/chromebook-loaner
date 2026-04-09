@@ -1060,6 +1060,7 @@ function submitCheckout() {
 
   save();
   sendToSheet(record);
+  syncInventoryToSheet();
   clearCheckoutForm();
   refreshAll();
   showToast('Checkout saved!', 'success');
@@ -1075,6 +1076,7 @@ function returnDevice(id) {
   save();
   refreshAll();
   sendReturnToSheet(rec);
+  syncInventoryToSheet();
   showToast('Device marked as returned.', 'success');
 }
 
@@ -1095,9 +1097,10 @@ function addDevice() {
   if (inventory.find(d => d.assetTag === asset)) { showToast('Asset tag already exists.', 'error'); return; }
   inventory.push({ assetTag: asset, serial, model, building, status: 'Available' });
   save();
-  renderInventory();
+  renderLoaners();
   renderAvailable();
   renderStats();
+  syncInventoryToSheet();
   document.getElementById('inv-asset').value  = '';
   document.getElementById('inv-serial').value = '';
   document.getElementById('inv-model').value  = '';
@@ -1108,8 +1111,9 @@ function removeDevice(tag) {
   if (!confirm('Remove device ' + tag + '?')) return;
   inventory = inventory.filter(d => d.assetTag !== tag);
   save();
-  renderInventory();
+  renderLoaners();
   renderStats();
+  syncInventoryToSheet();
   showToast('Device removed.');
 }
 
@@ -1329,6 +1333,25 @@ async function sendReturnToSheet(record) {
   } catch(e) { console.warn('Sheet sync failed:', e); }
 }
 
+// ── Inventory sync to Google Sheets ─────────────────────────────────────────
+
+async function syncInventoryToSheet() {
+  if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
+  try {
+    // Use POST with a payload param to handle large inventories without URL length limits
+    const body = new URLSearchParams({
+      payload: JSON.stringify({ action: 'syncInventory', devices: JSON.stringify(inventory) })
+    });
+    const res  = await fetch(SHEET_URL, { method: 'POST', body });
+    const json = await res.json();
+    if (json.status !== 'ok') {
+      console.error('Inventory sync error:', json.message);
+    }
+  } catch(e) {
+    console.error('Inventory sync failed:', e);
+  }
+}
+
 // ── Inline cell editing ───────────────────────────────────────────────────────
 
 const CELL_OPTIONS = {
@@ -1387,7 +1410,7 @@ function startCellEdit(td, store, field, assetTag, inputType, options) {
       checkouts.forEach(c => { if (c.assetTag === oldTag) c.assetTag = newVal; });
     }
     save();
-    if (store === 'loaner') renderLoaners();
+    if (store === 'loaner') { renderLoaners(); syncInventoryToSheet(); }
     else renderAllInventory();
     renderStats();
     showToast('Saved.', 'success');

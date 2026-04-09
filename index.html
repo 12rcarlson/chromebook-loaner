@@ -447,6 +447,7 @@
   <button onclick="showPage('incidents')">Incidents</button>
   <button onclick="showPage('loaners')">Loaners</button>
   <button onclick="showPage('inventory')">Inventory</button>
+  <button onclick="showPage('parts')">Parts Inventory</button>
 </nav>
 
 <main>
@@ -618,11 +619,18 @@
     <h1 class="section-heading">Incident Management</h1>
     <div class="search-bar">
       <input type="text" id="incident-search" placeholder="Search by student, asset tag, or serial..." oninput="renderIncidents()" />
-      <select id="incident-filter" onchange="renderIncidents()">
+      <select id="incident-filter" onchange="renderIncidents()" style="width:160px;">
         <option value="">All Types</option>
         <option>Forgot Device</option>
         <option>Needs Repair</option>
         <option>Lost</option>
+      </select>
+      <select id="incident-status-filter" onchange="renderIncidents()" style="width:140px;">
+        <option value="">All Statuses</option>
+        <option value="Active">Active / On Loan</option>
+        <option value="Returned">Returned</option>
+        <option value="Needs Repair">Needs Repair</option>
+        <option value="Loaned Out">Loaned Out</option>
       </select>
       <button class="btn btn-secondary" onclick="exportCSV()">Export CSV</button>
     </div>
@@ -756,6 +764,138 @@
       </table>
     </div>
   </div>
+  <!-- PARTS INVENTORY -->
+  <div id="page-parts" class="page">
+    <h1 class="section-heading">Parts Inventory</h1>
+
+    <!-- Summary bar -->
+    <div class="stats-bar" style="grid-template-columns: repeat(3,1fr); margin-bottom:1.5rem;">
+      <div class="stat-card blue">
+        <div class="label">Total Parts Value</div>
+        <div class="value" id="parts-total-value" style="font-size:22px;">$0.00</div>
+      </div>
+      <div class="stat-card red">
+        <div class="label">Low Stock Alerts</div>
+        <div class="value" id="parts-low-stock">0</div>
+      </div>
+      <div class="stat-card green">
+        <div class="label">Unique Part Types</div>
+        <div class="value" id="parts-unique">0</div>
+      </div>
+    </div>
+
+    <!-- Search + filters -->
+    <div class="search-bar" style="flex-wrap:wrap; gap:8px; margin-bottom:1rem;">
+      <input type="text" id="parts-search" placeholder="Search part name, model, vendor..." oninput="renderParts()" style="flex:1; min-width:180px;" />
+      <select id="parts-type-filter" onchange="renderParts()" style="width:150px;">
+        <option value="">All Part Types</option>
+        <option>Screen</option><option>Battery</option><option>Keyboard</option>
+        <option>Palmrest</option><option>Trackpad</option><option>Motherboard</option>
+        <option>Hinges</option><option>Power Port</option><option>Misc</option>
+      </select>
+      <select id="parts-mfr-filter" onchange="renderParts()" style="width:130px;">
+        <option value="">All Manufacturers</option>
+        <option>HP</option><option>ASUS</option><option>Lenovo</option><option>Dell</option><option>Acer</option>
+      </select>
+      <select id="parts-stock-filter" onchange="renderParts()" style="width:140px;">
+        <option value="">All Stock Levels</option>
+        <option value="low">⚠ Low Stock (≤2)</option>
+        <option value="ok">In Stock (&gt;2)</option>
+        <option value="zero">Out of Stock (0)</option>
+      </select>
+      <button class="btn btn-primary" onclick="openAddPart()">+ Add Part</button>
+      <button class="btn btn-secondary" onclick="exportPartsCSV()">Export CSV</button>
+    </div>
+
+    <!-- Model cross-reference hint -->
+    <div style="background:var(--primary-light); border:1px solid #b3d0f0; border-radius:8px; padding:10px 16px; margin-bottom:1rem; font-size:13px; color:var(--primary-dark); display:flex; align-items:center; gap:8px;">
+      <span>💡</span>
+      <span><strong>Model Cross-Reference:</strong> The "Compatible Models" field links parts to devices in your Loaner &amp; Full Inventory. Type model keywords (e.g. "HP 14 G5") to match across both lists.</span>
+    </div>
+
+    <div class="card">
+      <div style="padding:10px 14px; background:var(--bg-surface); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+        <span style="font-size:13px; color:var(--text-muted);" id="parts-count">0 parts</span>
+        <button class="btn btn-danger btn-sm" onclick="clearParts()">Clear All</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Part Type</th>
+              <th>Manufacturer</th>
+              <th>Part Name</th>
+              <th>Value</th>
+              <th style="text-align:center;">Stock</th>
+              <th>FRU / Model #</th>
+              <th>Compatible Models</th>
+              <th>Last Vendor</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="parts-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Add / Edit Part Form -->
+    <div id="add-part-form" style="display:none; margin-top:1.5rem;">
+      <div class="card">
+        <div class="card-header">
+          <h2 id="part-form-title">Add New Part</h2>
+          <button class="btn btn-secondary btn-sm" onclick="closeAddPart()">Cancel</button>
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Part Type</label>
+              <select id="part-type">
+                <option value="">Select type</option>
+                <option>Screen</option><option>Battery</option><option>Keyboard</option>
+                <option>Palmrest</option><option>Trackpad</option><option>Motherboard</option>
+                <option>Hinges</option><option>Power Port</option><option>Misc</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Manufacturer</label>
+              <select id="part-mfr">
+                <option value="">Select manufacturer</option>
+                <option>HP</option><option>ASUS</option><option>Lenovo</option><option>Dell</option><option>Acer</option>
+              </select>
+            </div>
+            <div class="form-group full">
+              <label>Part Name <span style="font-weight:400;color:var(--text-muted);font-size:12px;">(e.g. HP 14 G6 Palm Assembly)</span></label>
+              <input type="text" id="part-name" placeholder="Descriptive part name" />
+            </div>
+            <div class="form-group">
+              <label>Value (Replacement Cost)</label>
+              <input type="number" id="part-value" placeholder="0.00" min="0" step="0.01" />
+            </div>
+            <div class="form-group">
+              <label>Stock (Qty on Hand)</label>
+              <input type="number" id="part-stock" placeholder="0" min="0" step="1" />
+            </div>
+            <div class="form-group">
+              <label>FRU / Model Number <span style="font-weight:400;color:var(--text-muted);font-size:12px;">(e.g. L14356-001)</span></label>
+              <input type="text" id="part-fru" placeholder="Manufacturer part number" />
+            </div>
+            <div class="form-group">
+              <label>Previous Vendor <span style="font-weight:400;color:var(--text-muted);font-size:12px;">(e.g. Amazon, CDW, AGParts)</span></label>
+              <input type="text" id="part-vendor" placeholder="Last purchase vendor" />
+            </div>
+            <div class="form-group full">
+              <label>Compatible Models <span style="font-weight:400;color:var(--text-muted);font-size:12px;">(comma-separated, matches devices in your inventory)</span></label>
+              <input type="text" id="part-models" placeholder="e.g. HP Chromebook 14 G5, HP Chromebook 14 G6" />
+            </div>
+          </div>
+          <div style="margin-top:1.25rem; display:flex; gap:8px;">
+            <button class="btn btn-primary" onclick="savePart()">Save Part</button>
+            <button class="btn btn-secondary" onclick="closeAddPart()">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
 </main>
 
@@ -771,14 +911,23 @@ let inventory    = JSON.parse(localStorage.getItem('inventory') || JSON.stringif
   { assetTag:'2968', serial:'YX04QL9K',   model:'HP Chromebook 14 G5 (Intel)', building:'Bureau Valley High School', status:'Available' },
 ]));
 let allInventory = JSON.parse(localStorage.getItem('allInventory') || '[]');
+let partsInventory = JSON.parse(localStorage.getItem('partsInventory') || JSON.stringify([
+  { id:'p1', type:'Screen', mfr:'HP', name:'HP 14 G7 Non-touch Screen', value:45.00, stock:3, fru:'NT140FHM-N43', models:'HP Chromebook 14 G7', vendor:'AGParts' },
+  { id:'p2', type:'Screen', mfr:'ASUS', name:'ASUS C523N Screen', value:15.00, stock:3, fru:'LCD-SNG9349-1', models:'ASUS Chromebook C523NA', vendor:'AGParts' },
+  { id:'p3', type:'Screen', mfr:'HP', name:'HP 11 G8 EE Touch Screen', value:44.00, stock:3, fru:'NV116WHM-T01', models:'HP Chromebook 11 G8 EE', vendor:'AGParts' },
+  { id:'p4', type:'Screen', mfr:'Lenovo', name:'Lenovo 100e Touch Screen', value:28.39, stock:3, fru:'N116BCN-EA1', models:'Lenovo 100e Chromebook 2nd Gen', vendor:'CDW' },
+]));
 let nextId       = parseInt(localStorage.getItem('nextId') || '2020');
+let nextPartId   = parseInt(localStorage.getItem('nextPartId') || '100');
 
 function save() {
   try {
     localStorage.setItem('checkouts',    JSON.stringify(checkouts));
     localStorage.setItem('inventory',    JSON.stringify(inventory));
     localStorage.setItem('allInventory', JSON.stringify(allInventory));
+    localStorage.setItem('partsInventory', JSON.stringify(partsInventory));
     localStorage.setItem('nextId',       nextId);
+    localStorage.setItem('nextPartId',   nextPartId);
   } catch(e) {
     if (e.name === 'QuotaExceededError' || e.code === 22) {
       showToast('Storage limit reached — inventory will not persist between sessions. Use Export CSV to save records.', 'error');
@@ -793,7 +942,7 @@ function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
-  const tabs = ['dashboard','checkout','incidents','loaners','inventory'];
+  const tabs = ['dashboard','checkout','incidents','loaners','inventory','parts'];
   document.querySelectorAll('nav button')[tabs.indexOf(name)].classList.add('active');
   refreshAll();
 }
@@ -806,6 +955,7 @@ function refreshAll() {
   renderAllInventory();
   renderAvailable();
   renderIncidentSummary();
+  renderParts();
 }
 
 function badgeHtml(type) {
@@ -867,15 +1017,17 @@ function renderIncidentSummary() {
 }
 
 function renderIncidents() {
-  const search = (document.getElementById('incident-search')?.value || '').toLowerCase();
-  const filter = document.getElementById('incident-filter')?.value || '';
-  const tbody  = document.getElementById('incident-tbody');
+  const search  = (document.getElementById('incident-search')?.value || '').toLowerCase();
+  const filter  = document.getElementById('incident-filter')?.value || '';
+  const statusF = document.getElementById('incident-status-filter')?.value || '';
+  const tbody   = document.getElementById('incident-tbody');
   if (!tbody) return;
 
   let rows = [...checkouts].reverse().filter(c => {
-    const matchText = !search || [c.studentName, c.assetTag, c.serial, c.studentId].some(v => v && v.toLowerCase().includes(search));
-    const matchType = !filter || c.type === filter;
-    return matchText && matchType;
+    const matchText   = !search || [c.studentName, c.assetTag, c.serial, c.studentId].some(v => v && v.toLowerCase().includes(search));
+    const matchType   = !filter || c.type === filter;
+    const matchStatus = !statusF || c.status === statusF || (statusF === 'Active' && c.status === 'Active') || (statusF === 'Returned' && c.status === 'Returned');
+    return matchText && matchType && matchStatus;
   });
 
   if (!rows.length) {
@@ -1338,7 +1490,6 @@ async function sendReturnToSheet(record) {
 async function syncInventoryToSheet() {
   if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
   try {
-    // Use POST with a payload param to handle large inventories without URL length limits
     const body = new URLSearchParams({
       payload: JSON.stringify({ action: 'syncInventory', devices: JSON.stringify(inventory) })
     });
@@ -1349,6 +1500,22 @@ async function syncInventoryToSheet() {
     }
   } catch(e) {
     console.error('Inventory sync failed:', e);
+  }
+}
+
+async function syncPartsToSheet() {
+  if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
+  try {
+    const body = new URLSearchParams({
+      payload: JSON.stringify({ action: 'syncParts', parts: JSON.stringify(partsInventory) })
+    });
+    const res  = await fetch(SHEET_URL, { method: 'POST', body });
+    const json = await res.json();
+    if (json.status !== 'ok') {
+      console.error('Parts sync error:', json.message);
+    }
+  } catch(e) {
+    console.error('Parts sync failed:', e);
   }
 }
 
@@ -1472,6 +1639,187 @@ function getTomorrow() {
 }
 
 document.getElementById('co-due').value = getTomorrow();
+
+// ── Parts Inventory ────────────────────────────────────────────────────────────
+
+function renderParts() {
+  const search   = (document.getElementById('parts-search')?.value || '').toLowerCase();
+  const typeF    = document.getElementById('parts-type-filter')?.value || '';
+  const mfrF     = document.getElementById('parts-mfr-filter')?.value || '';
+  const stockF   = document.getElementById('parts-stock-filter')?.value || '';
+  const tbody    = document.getElementById('parts-tbody');
+  if (!tbody) return;
+
+  const rows = partsInventory.filter(p => {
+    const matchText  = !search || [p.name, p.fru, p.models, p.vendor, p.type, p.mfr].some(v => v && v.toLowerCase().includes(search));
+    const matchType  = !typeF  || p.type === typeF;
+    const matchMfr   = !mfrF   || p.mfr  === mfrF;
+    const stock = Number(p.stock) || 0;
+    const matchStock = !stockF  ||
+      (stockF === 'low'  && stock <= 2) ||
+      (stockF === 'ok'   && stock > 2)  ||
+      (stockF === 'zero' && stock === 0);
+    return matchText && matchType && matchMfr && matchStock;
+  });
+
+  // Summary stats
+  const totalValue  = partsInventory.reduce((sum, p) => sum + (Number(p.value)||0) * (Number(p.stock)||0), 0);
+  const lowStock    = partsInventory.filter(p => Number(p.stock) <= 2).length;
+  const uniqueTypes = new Set(partsInventory.map(p => p.type)).size;
+  const tvEl = document.getElementById('parts-total-value');
+  const lsEl = document.getElementById('parts-low-stock');
+  const utEl = document.getElementById('parts-unique');
+  if (tvEl) tvEl.textContent = '$' + totalValue.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  if (lsEl) lsEl.textContent = lowStock;
+  if (utEl) utEl.textContent = uniqueTypes;
+
+  const countEl = document.getElementById('parts-count');
+  if (countEl) countEl.textContent = `${rows.length} of ${partsInventory.length} parts`;
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:3rem;color:var(--text-muted);">${partsInventory.length ? 'No parts match your filters.' : 'No parts yet — click &ldquo;+ Add Part&rdquo; to get started.'}</td></tr>`;
+    return;
+  }
+
+  // Cross-reference: gather all model names from both device lists
+  const allModels = [...inventory.map(d=>d.model), ...allInventory.map(d=>d.model)].filter(Boolean).map(m=>m.toLowerCase());
+
+  tbody.innerHTML = rows.map(p => {
+    const stock  = Number(p.stock) || 0;
+    const isLow  = stock > 0 && stock <= 2;
+    const isZero = stock === 0;
+    const stockStyle = isZero
+      ? 'display:inline-block;background:#a32d2d;color:#fff;font-weight:700;border-radius:5px;padding:2px 8px;min-width:28px;text-align:center;'
+      : isLow
+        ? 'display:inline-block;background:#fcebeb;color:#a32d2d;font-weight:700;border-radius:5px;padding:2px 8px;min-width:28px;text-align:center;border:1px solid #f0a0a0;'
+        : 'display:inline-block;color:var(--accent);font-weight:600;padding:2px 4px;';
+
+    // Model cross-reference check
+    const modelKeywords = (p.models||'').split(',').map(m=>m.trim().toLowerCase()).filter(Boolean);
+    const hasMatch = modelKeywords.length > 0 && modelKeywords.some(kw => allModels.some(m => m.includes(kw.split(' ').slice(0,3).join(' ')) || kw.includes(m.split(' ').slice(0,3).join(' '))));
+    const modelHtml = p.models
+      ? `<span style="font-size:12px;color:${hasMatch ? 'var(--accent)' : 'var(--text-muted)'};">${p.models}</span>${hasMatch ? ' <span style="font-size:10px;background:var(--accent-light);color:#085041;padding:1px 5px;border-radius:10px;border:1px solid #9fe1cb;white-space:nowrap;">✓ in inventory</span>' : ''}`
+      : '<span style="color:var(--text-muted);font-size:12px;">—</span>';
+
+    return `<tr${isLow || isZero ? ' style="background:var(--danger-light) !important;"' : ''}>
+      <td><span class="badge" style="background:var(--primary-light);color:var(--primary-dark);font-size:11px;">${p.type||'—'}</span></td>
+      <td style="font-size:13px;font-weight:500;">${p.mfr||'—'}</td>
+      <td><strong style="font-size:13px;">${p.name||'—'}</strong></td>
+      <td style="font-size:13px;">${p.value != null ? '$' + Number(p.value).toFixed(2) : '—'}</td>
+      <td style="text-align:center;"><span style="${stockStyle}">${stock}</span>${isLow || isZero ? ' <span style="font-size:10px;color:var(--danger);">⚠</span>' : ''}</td>
+      <td style="font-size:12px;font-family:monospace;color:var(--text-muted);">${p.fru||'—'}</td>
+      <td style="max-width:200px;">${modelHtml}</td>
+      <td style="font-size:12px;color:var(--text-muted);">${p.vendor||'—'}</td>
+      <td>
+        <div class="actions">
+          <button class="btn btn-secondary btn-sm" onclick="editPart('${p.id}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deletePart('${p.id}')">✕</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+let editingPartId = null;
+
+function openAddPart() {
+  editingPartId = null;
+  document.getElementById('part-form-title').textContent = 'Add New Part';
+  ['part-name','part-value','part-stock','part-fru','part-vendor','part-models'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('part-type').value = '';
+  document.getElementById('part-mfr').value  = '';
+  document.getElementById('add-part-form').style.display = 'block';
+  document.getElementById('add-part-form').scrollIntoView({behavior:'smooth'});
+}
+
+function closeAddPart() {
+  document.getElementById('add-part-form').style.display = 'none';
+  editingPartId = null;
+}
+
+function editPart(id) {
+  const p = partsInventory.find(x => x.id === id);
+  if (!p) return;
+  editingPartId = id;
+  document.getElementById('part-form-title').textContent = 'Edit Part';
+  document.getElementById('part-type').value   = p.type   || '';
+  document.getElementById('part-mfr').value    = p.mfr    || '';
+  document.getElementById('part-name').value   = p.name   || '';
+  document.getElementById('part-value').value  = p.value  != null ? p.value : '';
+  document.getElementById('part-stock').value  = p.stock  != null ? p.stock : '';
+  document.getElementById('part-fru').value    = p.fru    || '';
+  document.getElementById('part-vendor').value = p.vendor || '';
+  document.getElementById('part-models').value = p.models || '';
+  document.getElementById('add-part-form').style.display = 'block';
+  document.getElementById('add-part-form').scrollIntoView({behavior:'smooth'});
+}
+
+function savePart() {
+  const type   = document.getElementById('part-type').value;
+  const mfr    = document.getElementById('part-mfr').value;
+  const name   = document.getElementById('part-name').value.trim();
+  const value  = parseFloat(document.getElementById('part-value').value) || 0;
+  const stock  = parseInt(document.getElementById('part-stock').value, 10);
+  const fru    = document.getElementById('part-fru').value.trim();
+  const vendor = document.getElementById('part-vendor').value.trim();
+  const models = document.getElementById('part-models').value.trim();
+
+  if (!name) { showToast('Part name is required.', 'error'); return; }
+
+  if (editingPartId) {
+    const p = partsInventory.find(x => x.id === editingPartId);
+    if (p) Object.assign(p, {type, mfr, name, value, stock: isNaN(stock) ? 0 : stock, fru, vendor, models});
+    showToast('Part updated!', 'success');
+  } else {
+    partsInventory.push({ id: 'p' + (nextPartId++), type, mfr, name, value, stock: isNaN(stock) ? 0 : stock, fru, vendor, models });
+    showToast('Part added!', 'success');
+  }
+
+  save();
+  closeAddPart();
+  renderParts();
+  syncPartsToSheet();
+}
+
+function deletePart(id) {
+  if (!confirm('Delete this part?')) return;
+  partsInventory = partsInventory.filter(p => p.id !== id);
+  save();
+  renderParts();
+  syncPartsToSheet();
+  showToast('Part removed.');
+}
+
+function clearParts() {
+  if (!confirm(`Clear all ${partsInventory.length} parts? This cannot be undone.`)) return;
+  partsInventory = [];
+  save();
+  renderParts();
+  syncPartsToSheet();
+  showToast('Parts inventory cleared.');
+}
+
+function exportPartsCSV() {
+  const headers = ['Part Type','Manufacturer','Part Name','Value','Stock','FRU/Model #','Compatible Models','Previous Vendor','Line Total'];
+  const rows = partsInventory.map(p => [
+    p.type||'', p.mfr||'', p.name||'',
+    p.value != null ? p.value : 0,
+    p.stock != null ? p.stock : 0,
+    p.fru||'', p.models||'', p.vendor||'',
+    ((Number(p.value)||0) * (Number(p.stock)||0)).toFixed(2)
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'parts-inventory-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  showToast('Parts CSV exported!', 'success');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 refreshAll();
 </script>

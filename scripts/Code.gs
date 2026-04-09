@@ -13,6 +13,7 @@
 const SPREADSHEET_ID  = '1jgE9Qt7-lsntIIxjake_Plh2eUwj2P3TkHaORgSzxvA';
 const CHECKOUT_SHEET  = 'Checkouts';
 const INVENTORY_SHEET = 'Inventory';
+const PARTS_SHEET     = 'Parts';
 const LOG_SHEET       = 'Log';
 
 const CHECKOUT_HEADERS = [
@@ -23,6 +24,11 @@ const CHECKOUT_HEADERS = [
 
 const INVENTORY_HEADERS = [
   'Asset Tag', 'Serial Number', 'Model', 'Building', 'Status', 'Last Updated'
+];
+
+const PARTS_HEADERS = [
+  'Part Type', 'Manufacturer', 'Part Name', 'Value ($)', 'Stock',
+  'FRU / Model #', 'Compatible Models', 'Previous Vendor', 'Line Total ($)', 'Last Updated'
 ];
 
 // --- Shared response helper --------------------------------------------------
@@ -54,6 +60,8 @@ function doPost(e) {
       markReturned(data.id, data.returnDate);
     } else if (data.action === 'syncInventory') {
       syncInventory(JSON.parse(data.devices));
+    } else if (data.action === 'syncParts') {
+      syncParts(JSON.parse(data.parts));
     } else {
       throw new Error('Unknown action: ' + data.action);
     }
@@ -216,6 +224,85 @@ function syncInventory(devices) {
   SpreadsheetApp.flush();
 }
 
+// Replaces the entire Parts sheet with the current parts inventory from the app.
+// Called whenever a part is added, removed, or edited.
+function syncParts(parts) {
+  const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = getOrCreateSheet(ss, PARTS_SHEET);
+  const now   = new Date().toLocaleString('en-US');
+
+  // Clear everything below the header
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, PARTS_HEADERS.length).clearContent();
+    sheet.getRange(2, 1, lastRow - 1, PARTS_HEADERS.length).setBackground(null);
+  }
+
+  ensureHeaders(sheet, PARTS_HEADERS);
+
+  if (!parts || !parts.length) return;
+
+  const rows = parts.map(p => {
+    const value    = Number(p.value)  || 0;
+    const stock    = Number(p.stock)  || 0;
+    const lineTotal = (value * stock).toFixed(2);
+    return [
+      p.type    || '',
+      p.mfr     || '',
+      p.name    || '',
+      value,
+      stock,
+      p.fru     || '',
+      p.models  || '',
+      p.vendor  || '',
+      Number(lineTotal),
+      now
+    ];
+  });
+
+  sheet.getRange(2, 1, rows.length, PARTS_HEADERS.length).setValues(rows);
+
+  // Format Value and Line Total columns as currency (D and I)
+  sheet.getRange(2, 4, rows.length, 1).setNumberFormat('$#,##0.00');
+  sheet.getRange(2, 9, rows.length, 1).setNumberFormat('$#,##0.00');
+
+  // Color-code Stock column (E) — red if <= 2, green if > 2
+  const stockRange   = sheet.getRange(2, 5, rows.length, 1);
+  const stockBgColors = rows.map(r => {
+    const s = Number(r[4]) || 0;
+    if (s === 0)  return ['#fcebeb'];   // out of stock — red
+    if (s <= 2)   return ['#faeeda'];   // low stock — amber
+    return ['#e1f5ee'];                 // ok — green
+  });
+  stockRange.setBackgrounds(stockBgColors);
+
+  // Alternate row shading on non-stock columns
+  for (let i = 0; i < rows.length; i++) {
+    const bg = i % 2 === 0 ? '#f8f7f4' : null;
+    sheet.getRange(i + 2, 1, 1, PARTS_HEADERS.length).setBackground(bg || '#ffffff');
+    // Re-apply stock color over the alternating background
+    const s = Number(rows[i][4]) || 0;
+    const stockBg = s === 0 ? '#fcebeb' : s <= 2 ? '#faeeda' : '#e1f5ee';
+    sheet.getRange(i + 2, 5, 1, 1).setBackground(stockBg);
+  }
+
+  // Add a totals row at the bottom
+  const totalRow = rows.length + 2;
+  sheet.getRange(totalRow, 3, 1, 1).setValue('TOTAL INVENTORY VALUE');
+  sheet.getRange(totalRow, 3, 1, 1).setFontWeight('bold');
+  const totalValueFormula = `=SUM(I2:I${rows.length + 1})`;
+  sheet.getRange(totalRow, 9, 1, 1).setFormula(totalValueFormula);
+  sheet.getRange(totalRow, 9, 1, 1).setNumberFormat('$#,##0.00');
+  sheet.getRange(totalRow, 9, 1, 1).setFontWeight('bold');
+  sheet.getRange(totalRow, 9, 1, 1).setBackground('#1a56a0');
+  sheet.getRange(totalRow, 9, 1, 1).setFontColor('#ffffff');
+
+  sheet.setColumnWidths(1, PARTS_HEADERS.length, 140);
+  sheet.setColumnWidth(3, 220);  // Part Name — wider
+  sheet.setColumnWidth(7, 200);  // Compatible Models — wider
+  SpreadsheetApp.flush();
+}
+
 function logRequest(data) {
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, LOG_SHEET);
@@ -293,6 +380,12 @@ function setupSpreadsheet() {
   const inv = getOrCreateSheet(ss, INVENTORY_SHEET);
   ensureHeaders(inv, INVENTORY_HEADERS);
   inv.setColumnWidths(1, INVENTORY_HEADERS.length, 140);
+
+  const parts = getOrCreateSheet(ss, PARTS_SHEET);
+  ensureHeaders(parts, PARTS_HEADERS);
+  parts.setColumnWidths(1, PARTS_HEADERS.length, 140);
+  parts.setColumnWidth(3, 220);
+  parts.setColumnWidth(7, 200);
 
   SpreadsheetApp.flush();
   Logger.log('Setup complete.');

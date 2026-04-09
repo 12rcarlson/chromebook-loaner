@@ -481,13 +481,9 @@
         <div class="card-header"><h2>New Checkout</h2></div>
         <div class="card-body">
           <div class="form-grid">
-            <div class="form-group">
+            <div class="form-group full">
               <label for="co-student-name">Student Name</label>
-              <input type="text" id="co-student-name" placeholder="Last, First" />
-            </div>
-            <div class="form-group">
-              <label for="co-student-id">Student ID</label>
-              <input type="text" id="co-student-id" placeholder="e.g. 12345" />
+              <input type="text" id="co-student-name" placeholder="First Last" />
             </div>
             <div class="form-group">
               <label for="co-grade">Grade Level</label>
@@ -518,16 +514,38 @@
             </div>
             <div class="form-group">
               <label for="co-type">Incident Type</label>
-              <select id="co-type">
+              <select id="co-type" onchange="toggleDamagedPart()">
                 <option value="Forgot Device">Forgot Device</option>
                 <option value="Needs Repair">Needs Repair</option>
                 <option value="Lost">Lost</option>
-                <option value="Daily Loaner">Daily Loaner</option>
               </select>
             </div>
             <div class="form-group">
               <label for="co-due">Due Back</label>
               <input type="date" id="co-due" />
+            </div>
+            <div class="form-group full" id="damaged-part-section" style="display:none; background:var(--bg-surface); border:1px solid var(--border); border-radius:8px; padding:12px; gap:10px;">
+              <label style="font-size:13px; font-weight:600; color:var(--text);">Damaged Part</label>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:4px;">
+                <div class="form-group" style="margin:0;">
+                  <label for="co-damaged-part">Part</label>
+                  <select id="co-damaged-part" onchange="toggleOtherText()">
+                    <option value="">Select part</option>
+                    <option>Mouse</option>
+                    <option>Keyboard</option>
+                    <option>Broken Screen</option>
+                    <option>Power</option>
+                    <option>Case</option>
+                    <option>Sound</option>
+                    <option>Password</option>
+                    <option>Other</option>
+                  </select>
+                </div>
+                <div class="form-group" id="other-text-group" style="margin:0; display:none;">
+                  <label for="co-damaged-other">Describe</label>
+                  <input type="text" id="co-damaged-other" placeholder="Describe the issue..." />
+                </div>
+              </div>
             </div>
             <div class="form-group full">
               <label for="co-notes">Notes</label>
@@ -563,7 +581,6 @@
         <option>Forgot Device</option>
         <option>Needs Repair</option>
         <option>Lost</option>
-        <option>Daily Loaner</option>
       </select>
       <button class="btn btn-secondary" onclick="exportCSV()">Export CSV</button>
     </div>
@@ -645,7 +662,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbzvBrK3_CNCZ81yXveTcKOtXrV1cpQuXsyts5gqXmev83Vi5dWYph7-Gwax3zk7Cn4X/exec';
+const SHEET_URL = 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
 
 let checkouts = JSON.parse(localStorage.getItem('checkouts') || '[]');
 let inventory = JSON.parse(localStorage.getItem('inventory') || JSON.stringify([
@@ -823,15 +840,17 @@ function prefillDevice(tag, serial) {
 }
 
 function submitCheckout() {
-  const name     = document.getElementById('co-student-name').value.trim();
-  const sid      = document.getElementById('co-student-id').value.trim();
-  const grade    = document.getElementById('co-grade').value;
-  const building = document.getElementById('co-building').value;
-  const asset    = document.getElementById('co-asset').value.trim();
-  const serial   = document.getElementById('co-serial').value.trim();
-  const type     = document.getElementById('co-type').value;
-  const due      = document.getElementById('co-due').value;
-  const notes    = document.getElementById('co-notes').value.trim();
+  const name        = document.getElementById('co-student-name').value.trim();
+  const grade       = document.getElementById('co-grade').value;
+  const building    = document.getElementById('co-building').value;
+  const asset       = document.getElementById('co-asset').value.trim();
+  const serial      = document.getElementById('co-serial').value.trim();
+  const type        = document.getElementById('co-type').value;
+  const due         = document.getElementById('co-due').value;
+  const notes       = document.getElementById('co-notes').value.trim();
+  const damagedPart = document.getElementById('co-damaged-part').value;
+  const damagedOther= document.getElementById('co-damaged-other').value.trim();
+  const damaged     = damagedPart === 'Other' ? (damagedOther || 'Other') : damagedPart;
 
   if (!name || !asset || !type) {
     showToast('Student name, asset tag, and type are required.', 'error');
@@ -839,7 +858,7 @@ function submitCheckout() {
   }
 
   const today = new Date().toLocaleDateString('en-US');
-  const record = { id: nextId++, studentName: name, studentId: sid, grade, building, assetTag: asset, serial, type, date: today, due, notes, status: 'Active' };
+  const record = { id: nextId++, studentName: name, grade, building, assetTag: asset, serial, type, damagedPart: damaged, date: today, due, notes, status: 'Active' };
 
   checkouts.push(record);
 
@@ -905,16 +924,19 @@ function openAddDevice() {
 }
 
 function clearCheckoutForm() {
-  ['co-student-name','co-student-id','co-asset','co-serial','co-notes'].forEach(id => document.getElementById(id).value = '');
+  ['co-student-name','co-asset','co-serial','co-notes','co-damaged-other'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('co-grade').value = '';
   document.getElementById('co-building').value = '';
   document.getElementById('co-type').value = 'Forgot Device';
   document.getElementById('co-due').value = '';
+  document.getElementById('co-damaged-part').value = '';
+  document.getElementById('damaged-part-section').style.display = 'none';
+  document.getElementById('other-text-group').style.display = 'none';
 }
 
 function exportCSV() {
-  const headers = ['ID','Student Name','Student ID','Grade','Building','Asset Tag','Serial','Type','Date','Due Back','Status','Notes'];
-  const rows    = checkouts.map(c => [c.id, c.studentName, c.studentId||'', c.grade||'', c.building||'', c.assetTag, c.serial||'', c.type, c.date, c.due||'', c.status, c.notes||'']);
+  const headers = ['ID','Student Name','Grade','Building','Asset Tag','Serial','Type','Damaged Part','Date','Due Back','Status','Notes'];
+  const rows    = checkouts.map(c => [c.id, c.studentName, c.grade||'', c.building||'', c.assetTag, c.serial||'', c.type, c.damagedPart||'', c.date, c.due||'', c.status, c.notes||'']);
   const csv     = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
@@ -960,6 +982,22 @@ function updateClock() {
 
 setInterval(updateClock, 1000);
 updateClock();
+
+function toggleDamagedPart() {
+  const type = document.getElementById('co-type').value;
+  const section = document.getElementById('damaged-part-section');
+  section.style.display = type === 'Needs Repair' ? 'block' : 'none';
+  if (type !== 'Needs Repair') {
+    document.getElementById('co-damaged-part').value = '';
+    document.getElementById('co-damaged-other').value = '';
+    document.getElementById('other-text-group').style.display = 'none';
+  }
+}
+
+function toggleOtherText() {
+  const val = document.getElementById('co-damaged-part').value;
+  document.getElementById('other-text-group').style.display = val === 'Other' ? 'block' : 'none';
+}
 
 const today = new Date().toISOString().slice(0,10);
 document.getElementById('co-due').value = today;

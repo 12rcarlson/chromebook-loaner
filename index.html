@@ -1701,12 +1701,12 @@ function renderParts() {
       ? `<span style="font-size:12px;color:${hasMatch ? 'var(--accent)' : 'var(--text-muted)'};">${p.models}</span>${hasMatch ? ' <span style="font-size:10px;background:var(--accent-light);color:#085041;padding:1px 5px;border-radius:10px;border:1px solid #9fe1cb;white-space:nowrap;">✓ in inventory</span>' : ''}`
       : '<span style="color:var(--text-muted);font-size:12px;">—</span>';
 
-    return `<tr${isLow || isZero ? ' style="background:var(--danger-light) !important;"' : ''}>
+    return `<tr>
       <td><span class="badge" style="background:var(--primary-light);color:var(--primary-dark);font-size:11px;">${p.type||'—'}</span></td>
       <td style="font-size:13px;font-weight:500;">${p.mfr||'—'}</td>
       <td><strong style="font-size:13px;">${p.name||'—'}</strong></td>
       <td style="font-size:13px;">${p.value != null ? '$' + Number(p.value).toFixed(2) : '—'}</td>
-      <td style="text-align:center;"><span style="${stockStyle}">${stock}</span>${isLow || isZero ? ' <span style="font-size:10px;color:var(--danger);">⚠</span>' : ''}</td>
+      <td style="text-align:center;"><span style="${stockStyle}">${stock}</span>${isLow || isZero ? ' <span style="font-size:10px;color:var(--warning);">⚠</span>' : ''}</td>
       <td style="font-size:12px;font-family:monospace;color:var(--text-muted);">${p.fru||'—'}</td>
       <td style="max-width:200px;">${modelHtml}</td>
       <td style="font-size:12px;color:var(--text-muted);">${p.vendor||'—'}</td>

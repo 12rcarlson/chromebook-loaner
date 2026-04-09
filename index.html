@@ -760,7 +760,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const SHEET_URL = 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbzvBrK3_CNCZ81yXveTcKOtXrV1cpQuXsyts5gqXmev83Vi5dWYph7-Gwax3zk7Cn4X/exec';
 
 let checkouts    = JSON.parse(localStorage.getItem('checkouts') || '[]');
 let inventory    = JSON.parse(localStorage.getItem('inventory') || JSON.stringify([
@@ -1290,7 +1290,11 @@ function exportCSV() {
 }
 
 async function sendToSheet(record) {
-  if (SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
+  if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') {
+    console.warn('SHEET_URL not configured — checkout not synced to Google Sheets.');
+    showToast('Sheet URL not set — data saved locally only.', 'error');
+    return;
+  }
   try {
     const params = new URLSearchParams({
       action      : 'checkout',
@@ -1306,20 +1310,43 @@ async function sendToSheet(record) {
       due         : record.due         || '',
       notes       : record.notes       || ''
     });
-    await fetch(SHEET_URL + '?' + params.toString(), { method: 'GET', mode: 'no-cors' });
-  } catch(e) { console.warn('Sheet sync failed:', e); }
+    const res  = await fetch(SHEET_URL + '?' + params.toString());
+    const json = await res.json();
+    if (json.status === 'ok') {
+      showToast('Synced to Google Sheets.', 'success');
+    } else {
+      console.error('Sheet sync error:', json.message);
+      showToast('Sheet sync failed: ' + (json.message || 'unknown error'), 'error');
+    }
+  } catch(e) {
+    console.error('Sheet sync failed:', e);
+    showToast('Could not reach Google Sheets — saved locally.', 'error');
+  }
 }
 
 async function sendReturnToSheet(record) {
-  if (SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
+  if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') {
+    console.warn('SHEET_URL not configured — return not synced to Google Sheets.');
+    return;
+  }
   try {
     const params = new URLSearchParams({
       action     : 'return',
       id         : record.id,
       returnDate : record.returnDate || ''
     });
-    await fetch(SHEET_URL + '?' + params.toString(), { method: 'GET', mode: 'no-cors' });
-  } catch(e) { console.warn('Sheet sync failed:', e); }
+    const res  = await fetch(SHEET_URL + '?' + params.toString());
+    const json = await res.json();
+    if (json.status === 'ok') {
+      showToast('Return synced to Google Sheets.', 'success');
+    } else {
+      console.error('Sheet return sync error:', json.message);
+      showToast('Sheet sync failed: ' + (json.message || 'unknown error'), 'error');
+    }
+  } catch(e) {
+    console.error('Sheet return sync failed:', e);
+    showToast('Could not reach Google Sheets — saved locally.', 'error');
+  }
 }
 
 // ── Inline cell editing ───────────────────────────────────────────────────────

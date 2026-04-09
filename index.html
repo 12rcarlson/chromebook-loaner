@@ -1221,24 +1221,20 @@ function exportCSV() {
 async function sendToSheet(record) {
   if (SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
   try {
-    await fetch(SHEET_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'checkout', ...record })
-    });
+    const payload = JSON.stringify({ action: 'checkout', ...record });
+    const form = new FormData();
+    form.append('payload', payload);
+    await fetch(SHEET_URL, { method: 'POST', mode: 'no-cors', body: form });
   } catch(e) { console.warn('Sheet sync failed:', e); }
 }
 
 async function sendReturnToSheet(record) {
   if (SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
   try {
-    await fetch(SHEET_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'return', id: record.id, returnDate: record.returnDate })
-    });
+    const payload = JSON.stringify({ action: 'return', id: record.id, returnDate: record.returnDate });
+    const form = new FormData();
+    form.append('payload', payload);
+    await fetch(SHEET_URL, { method: 'POST', mode: 'no-cors', body: form });
   } catch(e) { console.warn('Sheet sync failed:', e); }
 }
 

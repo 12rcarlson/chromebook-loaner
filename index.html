@@ -705,11 +705,11 @@
     <div class="card">
       <div style="padding:10px 14px; background:var(--bg-surface); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
         <span style="font-size:13px; color:var(--text-muted);" id="all-inv-count">0 devices</span>
-        <button class="btn btn-danger btn-sm" onclick="clearAllInventory()">Clear All</button>
+        <button id="all-inv-clear-btn" class="btn btn-danger btn-sm" onclick="clearAllInventory()">Clear All</button>
       </div>
       <table>
         <thead>
-          <tr><th>Asset Tag</th><th>Model</th><th>Serial</th><th>Building</th><th>Assigned To</th><th>Status</th></tr>
+          <tr><th>Asset Tag</th><th>Model</th><th>Serial</th><th>Building</th><th>Assigned To</th><th>Status</th><th></th></tr>
         </thead>
         <tbody id="all-inventory-tbody"></tbody>
       </table>
@@ -907,8 +907,12 @@ function renderAllInventory() {
   const countEl = document.getElementById('all-inv-count');
   if (countEl) countEl.textContent = `${rows.length.toLocaleString()} of ${allInventory.length.toLocaleString()} devices`;
 
+  const isFiltered = search || filter || building;
+  const clearBtn = document.getElementById('all-inv-clear-btn');
+  if (clearBtn) clearBtn.textContent = isFiltered ? `Delete Filtered (${rows.length.toLocaleString()})` : `Clear All (${allInventory.length.toLocaleString()})`;
+
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:3rem;color:var(--text-muted);">${allInventory.length ? 'No devices match your filters.' : 'No devices yet — import your TDT CSV to get started.'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:3rem;color:var(--text-muted);">${allInventory.length ? 'No devices match your filters.' : 'No devices yet — import your TDT CSV to get started.'}</td></tr>`;
     return;
   }
 
@@ -924,10 +928,11 @@ function renderAllInventory() {
         d.status==='Unassigned'  ? 'badge-active'   :
         d.status==='Loaner'||d.status==='Daily Loaner' ? 'badge-active' :
         'badge-repair'}">${d.status}</span></td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeAllInvDevice('${d.assetTag}')">Delete</button></td>
     </tr>`).join('');
 
   if (rows.length > 200) {
-    tbody.innerHTML += `<tr><td colspan="6" style="text-align:center;padding:1rem;color:var(--text-muted);font-size:13px;">Showing 200 of ${rows.length.toLocaleString()} — use search or filters to narrow results</td></tr>`;
+    tbody.innerHTML += `<tr><td colspan="7" style="text-align:center;padding:1rem;color:var(--text-muted);font-size:13px;">Showing 200 of ${rows.length.toLocaleString()} — use search or filters to narrow results</td></tr>`;
   }
 }
 
@@ -1152,11 +1157,38 @@ function clearLoaners() {
   showToast('Loaner devices cleared.');
 }
 
+function removeAllInvDevice(tag) {
+  if (!confirm('Delete device ' + tag + ' from inventory?')) return;
+  allInventory = allInventory.filter(d => d.assetTag !== tag);
+  save();
+  renderAllInventory();
+  showToast('Device deleted.');
+}
+
 function clearAllInventory() {
-  if (!confirm(`Clear all ${allInventory.length.toLocaleString()} devices from full inventory? This cannot be undone.`)) return;
-  allInventory = [];
+  const search   = (document.getElementById('all-inv-search')?.value || '').toLowerCase();
+  const filter   = document.getElementById('all-inv-status-filter')?.value || '';
+  const building = document.getElementById('all-inv-building-filter')?.value || '';
+  const isFiltered = search || filter || building;
+
+  const toDelete = allInventory.filter(d =>
+    (!search   || [d.assetTag, d.model, d.serial, d.building, d.owner].some(v => v && v.toLowerCase().includes(search))) &&
+    (!filter   || d.status === filter) &&
+    (!building || d.building === building)
+  );
+
+  if (!toDelete.length) { showToast('Nothing to delete.'); return; }
+
+  const msg = isFiltered
+    ? `Delete ${toDelete.length.toLocaleString()} filtered devices? This cannot be undone.`
+    : `Clear all ${allInventory.length.toLocaleString()} devices? This cannot be undone.`;
+
+  if (!confirm(msg)) return;
+
+  const deleteSet = new Set(toDelete.map(d => d.assetTag));
+  allInventory = allInventory.filter(d => !deleteSet.has(d.assetTag));
   save(); refreshAll();
-  showToast('Full inventory cleared.');
+  showToast(`${toDelete.length.toLocaleString()} devices deleted.`);
 }
 
 function openAddDevice() {

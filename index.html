@@ -936,10 +936,10 @@ function renderLoaners() {
       <td class="editable" onclick="startCellEdit(this,'loaner','serial','${d.assetTag}','text')">
         <span style="font-size:12px;color:var(--text-muted)">${d.serial||''}</span><span class="edit-hint">✎</span>
       </td>
-      <td class="editable" onclick="startCellEdit(this,'loaner','building','${d.assetTag}','select',${JSON.stringify(BUILDINGS)})">
+      <td class="editable" data-store="loaner" data-field="building" data-key="${d.assetTag}" data-type="select" data-options="building-loaner" onclick="startCellEdit(this)">
         <span style="font-size:12px;color:var(--text-muted)">${d.building||'—'}</span><span class="edit-hint">✎</span>
       </td>
-      <td class="editable" onclick="startCellEdit(this,'loaner','status','${d.assetTag}','select',${JSON.stringify(LOANER_STATUSES)})">
+      <td class="editable" data-store="loaner" data-field="status" data-key="${d.assetTag}" data-type="select" data-options="status-loaner" onclick="startCellEdit(this)">
         ${loanerStatusBadge(d.status)}<span class="edit-hint">✎</span>
       </td>
       <td><button class="btn btn-danger btn-sm" onclick="removeDevice('${d.assetTag}')">Remove</button></td>
@@ -991,13 +991,13 @@ function renderAllInventory() {
       <td class="editable" onclick="startCellEdit(this,'all','serial','${d.assetTag}','text')">
         <span style="font-size:12px;color:var(--text-muted)">${d.serial||''}</span><span class="edit-hint">✎</span>
       </td>
-      <td class="editable" onclick="startCellEdit(this,'all','building','${d.assetTag}','select',${JSON.stringify(BUILDINGS)})">
+      <td class="editable" data-store="all" data-field="building" data-key="${d.assetTag}" data-type="select" data-options="building-all" onclick="startCellEdit(this)">
         <span style="font-size:12px;color:var(--text-muted)">${d.building||'—'}</span><span class="edit-hint">✎</span>
       </td>
       <td class="editable" onclick="startCellEdit(this,'all','owner','${d.assetTag}','text')">
         <span style="font-size:12px;color:var(--text-muted)">${d.owner||'—'}</span><span class="edit-hint">✎</span>
       </td>
-      <td class="editable" onclick="startCellEdit(this,'all','status','${d.assetTag}','select',${JSON.stringify(ALL_STATUSES)})">
+      <td class="editable" data-store="all" data-field="status" data-key="${d.assetTag}" data-type="select" data-options="status-all" onclick="startCellEdit(this)">
         <span class="badge ${statusCls}">${d.status}</span><span class="edit-hint">✎</span>
       </td>
       <td><button class="btn btn-danger btn-sm" onclick="removeAllInvDevice('${d.assetTag}')">Delete</button></td>
@@ -1331,8 +1331,23 @@ async function sendReturnToSheet(record) {
 
 // ── Inline cell editing ───────────────────────────────────────────────────────
 
+const CELL_OPTIONS = {
+  'building-loaner': ['Bureau Valley High School','Bureau Valley Elementary and Junior High','Bureau Valley Elementary-Wyanet','Bureau Valley North'],
+  'building-all':    ['Bureau Valley High School','Bureau Valley Elementary and Junior High','Bureau Valley Elementary-Wyanet','Bureau Valley North'],
+  'status-loaner':   ['Available','On Loan','Loaner','Daily Loaner','Needs Repair'],
+  'status-all':      ['Assigned','Unassigned','Loaner','Daily Loaner','Needs Repair','Forgot Device'],
+};
+
 function startCellEdit(td, store, field, assetTag, inputType, options) {
-  // Don't open a second editor if one is already open on this cell
+  // Support both old signature (args) and new data-attribute style
+  if (td && !store) {
+    store     = td.dataset.store;
+    field     = td.dataset.field;
+    assetTag  = td.dataset.key;
+    inputType = td.dataset.type || 'text';
+    options   = td.dataset.options ? CELL_OPTIONS[td.dataset.options] : null;
+  }
+
   if (td.querySelector('.cell-editor')) return;
 
   const dataArr = store === 'loaner' ? inventory : allInventory;
@@ -1341,7 +1356,6 @@ function startCellEdit(td, store, field, assetTag, inputType, options) {
 
   const currentVal = rec[field] || '';
 
-  // Hide existing display content
   Array.from(td.childNodes).forEach(n => { if (n.nodeType === 1) n.style.display = 'none'; });
 
   let editor;
@@ -1363,19 +1377,15 @@ function startCellEdit(td, store, field, assetTag, inputType, options) {
 
   td.appendChild(editor);
   editor.focus();
-  if (editor.tagName === 'INPUT') { editor.select(); }
+  if (editor.tagName === 'INPUT') editor.select();
 
   function commit() {
-    const newVal = editor.value;
-    // If assetTag field changed, update the key used for lookup
+    const newVal = editor.tagName === 'SELECT' ? editor.value : editor.value;
     const oldTag = rec.assetTag;
     rec[field] = newVal;
-
-    // If the assetTag itself was edited, we need to re-key any checkouts referencing it
     if (field === 'assetTag' && store === 'loaner') {
       checkouts.forEach(c => { if (c.assetTag === oldTag) c.assetTag = newVal; });
     }
-
     save();
     if (store === 'loaner') renderLoaners();
     else renderAllInventory();
@@ -1384,23 +1394,17 @@ function startCellEdit(td, store, field, assetTag, inputType, options) {
   }
 
   function cancel() {
-    // Restore display, remove editor
     Array.from(td.childNodes).forEach(n => {
-      if (n === editor) { td.removeChild(n); }
-      else if (n.nodeType === 1) { n.style.display = ''; }
+      if (n === editor) td.removeChild(n);
+      else if (n.nodeType === 1) n.style.display = '';
     });
   }
 
-  editor.addEventListener('blur', function() {
-    commit();
-  });
-
+  editor.addEventListener('blur', commit);
   editor.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') { editor.blur(); }
+    if (e.key === 'Enter') editor.blur();
     if (e.key === 'Escape') { editor.removeEventListener('blur', commit); cancel(); }
   });
-
-  // For selects, commit immediately on change
   if (inputType === 'select') {
     editor.addEventListener('change', function() { editor.blur(); });
   }

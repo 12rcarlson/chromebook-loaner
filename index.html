@@ -1356,7 +1356,13 @@ function importFromCSV(event, target) {
 
       save();
       refreshAll();
-      showBanner(target, `✓ Imported ${added.toLocaleString()} devices.${dupes ? ' ' + dupes + ' duplicates skipped.' : ''}${skipped ? ' ' + skipped + ' decommissioned skipped.' : ''}`, 'success');
+      // Sync to Google Sheet after CSV import
+      if (target === 'loaner') {
+        syncInventoryToSheet();
+      } else {
+        syncAllInventoryToSheet();
+      }
+      showBanner(target, `✓ Imported ${added.toLocaleString()} devices.${dupes ? ' ' + dupes + ' duplicates skipped.' : ''}${skipped ? ' ' + skipped + ' decommissioned skipped.' : ''} Syncing to Sheet...`, 'success');
     } catch(err) {
       console.error('Import error:', err);
       showBanner(target, 'Import failed: ' + err.message, 'error');
@@ -1392,6 +1398,7 @@ function removeAllInvDevice(tag) {
   allInventory = allInventory.filter(d => d.assetTag !== tag);
   save();
   renderAllInventory();
+  syncAllInventoryToSheet();
   showToast('Device deleted.');
 }
 
@@ -1418,6 +1425,7 @@ function clearAllInventory() {
   const deleteSet = new Set(toDelete.map(d => d.assetTag));
   allInventory = allInventory.filter(d => !deleteSet.has(d.assetTag));
   save(); refreshAll();
+  syncAllInventoryToSheet();
   showToast(`${toDelete.length.toLocaleString()} devices deleted.`);
 }
 
@@ -1503,6 +1511,24 @@ async function syncInventoryToSheet() {
   }
 }
 
+// Syncs the Full Device Inventory (allInventory) to the "All Inventory" sheet.
+// Called after CSV import, inline edits, and device deletions in Full Inventory.
+async function syncAllInventoryToSheet() {
+  if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
+  try {
+    const body = new URLSearchParams({
+      payload: JSON.stringify({ action: 'syncAllInventory', devices: JSON.stringify(allInventory) })
+    });
+    const res  = await fetch(SHEET_URL, { method: 'POST', body });
+    const json = await res.json();
+    if (json.status !== 'ok') {
+      console.error('All Inventory sync error:', json.message);
+    }
+  } catch(e) {
+    console.error('All Inventory sync failed:', e);
+  }
+}
+
 async function syncPartsToSheet() {
   if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
   try {
@@ -1578,7 +1604,7 @@ function startCellEdit(td, store, field, assetTag, inputType, options) {
     }
     save();
     if (store === 'loaner') { renderLoaners(); syncInventoryToSheet(); }
-    else renderAllInventory();
+    else { renderAllInventory(); syncAllInventoryToSheet(); }
     renderStats();
     showToast('Saved.', 'success');
   }

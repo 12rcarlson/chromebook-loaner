@@ -77,6 +77,103 @@ function doPost(e) {
 function doGet(e) {
   const action = e.parameter && e.parameter.action;
   if (action) {
+    // getAll — load all four sheets in one call for startup sync
+    if (action === 'getAll') {
+      try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+        // Parse checkouts sheet into structured records
+        const checkoutSheet = ss.getSheetByName(CHECKOUT_SHEET);
+        let checkouts = [];
+        if (checkoutSheet && checkoutSheet.getLastRow() > 1) {
+          const rows = checkoutSheet.getRange(2, 1, checkoutSheet.getLastRow() - 1, CHECKOUT_HEADERS.length).getValues();
+          checkouts = rows
+            .filter(r => r[0] !== '' && r[0] !== null)
+            .map(r => ({
+              id              : r[0],
+              studentName     : String(r[1]  || ''),
+              grade           : String(r[2]  || ''),
+              building        : String(r[3]  || ''),
+              assetTag        : String(r[4]  || ''),
+              serial          : String(r[5]  || ''),
+              type            : String(r[6]  || ''),
+              damagedPart     : String(r[7]  || ''),
+              originalAssetTag: String(r[8]  || ''),
+              date            : String(r[9]  || ''),
+              due             : String(r[10] || ''),
+              status          : String(r[11] || ''),
+              returnDate      : String(r[12] || ''),
+              notes           : String(r[13] || ''),
+            }));
+        }
+
+        // Parse loaner inventory sheet
+        const invSheet = ss.getSheetByName(INVENTORY_SHEET);
+        let inventory = [];
+        if (invSheet && invSheet.getLastRow() > 1) {
+          const rows = invSheet.getRange(2, 1, invSheet.getLastRow() - 1, INVENTORY_HEADERS.length).getValues();
+          inventory = rows
+            .filter(r => r[0] !== '' && r[0] !== null)
+            .map(r => ({
+              assetTag: String(r[0] || ''),
+              serial  : String(r[1] || ''),
+              model   : String(r[2] || ''),
+              building: String(r[3] || ''),
+              status  : String(r[4] || ''),
+            }));
+        }
+
+        // Parse full inventory sheet
+        const allInvSheet = ss.getSheetByName(ALL_INVENTORY_SHEET);
+        let allInventory = [];
+        if (allInvSheet && allInvSheet.getLastRow() > 1) {
+          const rows = allInvSheet.getRange(2, 1, allInvSheet.getLastRow() - 1, ALL_INVENTORY_HEADERS.length).getValues();
+          allInventory = rows
+            .filter(r => r[0] !== '' && r[0] !== null)
+            .map(r => ({
+              assetTag: String(r[0] || ''),
+              serial  : String(r[1] || ''),
+              model   : String(r[2] || ''),
+              building: String(r[3] || ''),
+              owner   : String(r[4] || ''),
+              status  : String(r[5] || ''),
+            }));
+        }
+
+        // Parse parts sheet (col K = internal part ID)
+        const partsSheet = ss.getSheetByName(PARTS_SHEET);
+        let parts = [];
+        if (partsSheet && partsSheet.getLastRow() > 1) {
+          const rows = partsSheet.getRange(2, 1, partsSheet.getLastRow() - 1, PART_ID_COL).getValues();
+          parts = rows
+            .filter(r => r[2] !== 'TOTAL INVENTORY VALUE' && r[0] !== '' && r[0] !== null)
+            .map(r => ({
+              type  : String(r[0] || ''),
+              mfr   : String(r[1] || ''),
+              name  : String(r[2] || ''),
+              value : Number(r[3]) || 0,
+              stock : Number(r[4]) || 0,
+              fru   : String(r[5] || ''),
+              models: String(r[6] || ''),
+              vendor: String(r[7] || ''),
+              id    : String(r[10] || ''),
+            }));
+        }
+
+        return jsonResponse({
+          status      : 'ok',
+          checkouts   : checkouts,
+          inventory   : inventory,
+          allInventory: allInventory,
+          parts       : parts,
+        });
+      } catch(err) {
+        Logger.log('doGet getAll error: ' + err.message);
+        return jsonResponse({ status: 'error', message: err.message });
+      }
+    }
+
+    // All other actions
     try {
       const data = Object.assign({}, e.parameter);
       if (data.devices && typeof data.devices === 'string') data.devices = JSON.parse(data.devices);
@@ -88,114 +185,6 @@ function doGet(e) {
       return jsonResponse({ status: 'ok', action });
     } catch(err) {
       Logger.log('doGet error: ' + err.message);
-      return jsonResponse({ status: 'error', message: err.message });
-    }
-  }
-  // getAll — used by the web app on startup to load all data from Sheets
-  if (action === 'getAll') {
-    try {
-      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-
-      function sheetToObjects(sheetName, headers) {
-        const sheet = ss.getSheetByName(sheetName);
-        if (!sheet || sheet.getLastRow() < 2) return [];
-        const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
-        return rows
-          .filter(r => r[0] !== '' && r[0] !== null)
-          .map(r => {
-            const obj = {};
-            headers.forEach((h, i) => obj[h] = r[i] !== null ? String(r[i]) : '');
-            return obj;
-          });
-      }
-
-      // Parse checkouts sheet into structured records
-      const checkoutSheet = ss.getSheetByName(CHECKOUT_SHEET);
-      let checkouts = [];
-      if (checkoutSheet && checkoutSheet.getLastRow() > 1) {
-        const rows = checkoutSheet.getRange(2, 1, checkoutSheet.getLastRow() - 1, CHECKOUT_HEADERS.length).getValues();
-        checkouts = rows
-          .filter(r => r[0] !== '' && r[0] !== null)
-          .map(r => ({
-            id          : r[0],
-            studentName : String(r[1] || ''),
-            grade       : String(r[2] || ''),
-            building    : String(r[3] || ''),
-            assetTag    : String(r[4] || ''),
-            serial      : String(r[5] || ''),
-            type        : String(r[6] || ''),
-            damagedPart : String(r[7] || ''),
-            originalAssetTag: String(r[8] || ''),
-            date        : String(r[9] || ''),
-            due         : String(r[10] || ''),
-            status      : String(r[11] || ''),
-            returnDate  : String(r[12] || ''),
-            notes       : String(r[13] || ''),
-          }));
-      }
-
-      // Parse inventory sheet
-      const invSheet = ss.getSheetByName(INVENTORY_SHEET);
-      let inventory = [];
-      if (invSheet && invSheet.getLastRow() > 1) {
-        const rows = invSheet.getRange(2, 1, invSheet.getLastRow() - 1, INVENTORY_HEADERS.length).getValues();
-        inventory = rows
-          .filter(r => r[0] !== '' && r[0] !== null)
-          .map(r => ({
-            assetTag: String(r[0] || ''),
-            serial  : String(r[1] || ''),
-            model   : String(r[2] || ''),
-            building: String(r[3] || ''),
-            status  : String(r[4] || ''),
-          }));
-      }
-
-      // Parse all inventory sheet
-      const allInvSheet = ss.getSheetByName(ALL_INVENTORY_SHEET);
-      let allInventory = [];
-      if (allInvSheet && allInvSheet.getLastRow() > 1) {
-        const rows = allInvSheet.getRange(2, 1, allInvSheet.getLastRow() - 1, ALL_INVENTORY_HEADERS.length).getValues();
-        allInventory = rows
-          .filter(r => r[0] !== '' && r[0] !== null)
-          .map(r => ({
-            assetTag: String(r[0] || ''),
-            serial  : String(r[1] || ''),
-            model   : String(r[2] || ''),
-            building: String(r[3] || ''),
-            owner   : String(r[4] || ''),
-            status  : String(r[5] || ''),
-          }));
-      }
-
-      // Parse parts sheet
-      const partsSheet = ss.getSheetByName(PARTS_SHEET);
-      let parts = [];
-      if (partsSheet && partsSheet.getLastRow() > 1) {
-        const rows = partsSheet.getRange(2, 1, partsSheet.getLastRow() - 1, PART_ID_COL).getValues();
-        parts = rows
-          .filter(r => r[2] !== 'TOTAL INVENTORY VALUE' && r[0] !== '' && r[0] !== null)
-          .map(r => ({
-            type  : String(r[0] || ''),
-            mfr   : String(r[1] || ''),
-            name  : String(r[2] || ''),
-            value : Number(r[3]) || 0,
-            stock : Number(r[4]) || 0,
-            fru   : String(r[5] || ''),
-            models: String(r[6] || ''),
-            vendor: String(r[7] || ''),
-            id    : String(r[10] || ''),  // col K = internal part ID
-          }));
-      }
-
-      return jsonResponse({
-        status      : 'ok',
-        checkouts   : checkouts,
-        inventory   : inventory,
-        allInventory: allInventory,
-        parts       : parts,
-      });
-    } catch(err) {
-      Logger.log('doGet getAll error: ' + err.message);
       return jsonResponse({ status: 'error', message: err.message });
     }
   }

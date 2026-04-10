@@ -823,7 +823,12 @@
         <option value="Needs Repair">Needs Repair</option>
         <option value="Loaned Out">Loaned Out</option>
       </select>
-      <button class="btn btn-secondary" onclick="exportCSV()">Export CSV</button>
+      <button class="btn btn-secondary" onclick="exportCSV()">⬇ Export CSV</button>
+      <button class="btn btn-primary" onclick="document.getElementById('incident-csv-input').click()">⬆ Import CSV</button>
+      <input type="file" id="incident-csv-input" accept=".csv" style="display:none" onchange="importIncidentsCSV(event)" />
+    </div>
+    <div id="incident-import-status" style="display:none; margin-bottom:1rem; padding:12px 16px; border-radius:8px; font-size:14px; background:var(--accent-light); color:#085041; border:1px solid #9fe1cb;">
+      <span id="incident-import-text"></span>
     </div>
     <div class="card">
       <table>
@@ -997,7 +1002,12 @@
         <option value="zero">Out of Stock (0)</option>
       </select>
       <button class="btn btn-primary" onclick="openAddPart()">+ Add Part</button>
-      <button class="btn btn-secondary" onclick="exportPartsCSV()">Export CSV</button>
+      <button class="btn btn-secondary" onclick="exportPartsCSV()">⬇ Export CSV</button>
+      <button class="btn btn-primary" onclick="document.getElementById('parts-csv-input').click()">⬆ Import CSV</button>
+      <input type="file" id="parts-csv-input" accept=".csv" style="display:none" onchange="importPartsCSV(event)" />
+    </div>
+    <div id="parts-import-status" style="display:none; margin-bottom:1rem; padding:12px 16px; border-radius:8px; font-size:14px; background:var(--accent-light); color:#085041; border:1px solid #9fe1cb;">
+      <span id="parts-import-text"></span>
     </div>
 
     <!-- Model cross-reference hint -->
@@ -1578,6 +1588,198 @@ function showBanner(target, msg, type) {
   el.style.color      = type === 'error' ? 'var(--danger)'        : '#085041';
   el.style.border     = type === 'error' ? '1px solid #f09595'    : '1px solid #9fe1cb';
   setTimeout(() => { el.style.display = 'none'; }, 6000);
+}
+
+function showBannerFor(statusId, textId, msg, type) {
+  const el  = document.getElementById(statusId);
+  const txt = document.getElementById(textId);
+  if (!el || !txt) return;
+  el.style.display    = 'block';
+  txt.textContent     = msg;
+  el.style.background = type === 'error' ? 'var(--danger-light)'  : 'var(--accent-light)';
+  el.style.color      = type === 'error' ? 'var(--danger)'        : '#085041';
+  el.style.border     = type === 'error' ? '1px solid #f09595'    : '1px solid #9fe1cb';
+  setTimeout(() => { el.style.display = 'none'; }, 6000);
+}
+
+function importIncidentsCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  showBannerFor('incident-import-status', 'incident-import-text', 'Reading file...', 'success');
+  const reader = new FileReader();
+  reader.onerror = () => showBannerFor('incident-import-status', 'incident-import-text', 'Error reading file.', 'error');
+  reader.onload = function(e) {
+    try {
+      const lines = e.target.result.split('\n').filter(l => l.trim());
+      if (lines.length < 2) { showBannerFor('incident-import-status', 'incident-import-text', 'File appears empty.', 'error'); return; }
+
+      const header = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+
+      // Accept our own export format OR a custom CSV with flexible column names
+      const idx = {
+        id          : header.findIndex(h => /^id$/i.test(h)),
+        studentName : header.findIndex(h => /student.?name/i.test(h)),
+        grade       : header.findIndex(h => /^grade/i.test(h)),
+        building    : header.findIndex(h => /building/i.test(h)),
+        assetTag    : header.findIndex(h => /asset.?tag/i.test(h)),
+        serial      : header.findIndex(h => /serial/i.test(h)),
+        type        : header.findIndex(h => /^type$/i.test(h) || /incident.?type/i.test(h)),
+        damagedPart : header.findIndex(h => /damaged/i.test(h)),
+        origAsset   : header.findIndex(h => /original/i.test(h)),
+        date        : header.findIndex(h => /^date|checkout/i.test(h)),
+        due         : header.findIndex(h => /due/i.test(h)),
+        status      : header.findIndex(h => /^status$/i.test(h)),
+        notes       : header.findIndex(h => /notes/i.test(h)),
+      };
+
+      if (idx.studentName === -1 && idx.assetTag === -1) {
+        showBannerFor('incident-import-status', 'incident-import-text', 'Could not find Student Name or Asset Tag columns.', 'error');
+        return;
+      }
+
+      function parseRow(line) {
+        const cols = []; let cur = '', inQ = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') { inQ = !inQ; }
+          else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
+          else { cur += ch; }
+        }
+        cols.push(cur.trim());
+        return cols;
+      }
+      function col(cols, i) { return (i !== -1 && cols[i] !== undefined) ? cols[i].trim() : ''; }
+
+      const existingIds = new Set(checkouts.map(c => String(c.id)));
+      let added = 0, dupes = 0, skipped = 0;
+      const today = new Date().toLocaleDateString('en-US');
+
+      for (let i = 1; i < lines.length; i++) {
+        const cols       = parseRow(lines[i]);
+        const studentName = col(cols, idx.studentName);
+        const assetTag    = col(cols, idx.assetTag);
+        if (!studentName && !assetTag) { skipped++; continue; }
+
+        const csvId = col(cols, idx.id);
+        if (csvId && existingIds.has(csvId)) { dupes++; continue; }
+
+        const newId = csvId ? parseInt(csvId, 10) : nextId++;
+        const record = {
+          id          : newId,
+          studentName : studentName || 'Unknown',
+          grade       : col(cols, idx.grade),
+          building    : col(cols, idx.building),
+          assetTag    : assetTag,
+          serial      : col(cols, idx.serial),
+          type        : col(cols, idx.type) || 'Forgot Device',
+          damagedPart : col(cols, idx.damagedPart),
+          originalAssetTag: col(cols, idx.origAsset),
+          date        : col(cols, idx.date) || today,
+          due         : col(cols, idx.due),
+          status      : col(cols, idx.status) || 'Active',
+          notes       : col(cols, idx.notes),
+        };
+        checkouts.push(record);
+        existingIds.add(String(newId));
+        added++;
+      }
+
+      save();
+      refreshAll();
+      showBannerFor('incident-import-status', 'incident-import-text',
+        `✓ Imported ${added} incident${added !== 1 ? 's' : ''}.${dupes ? ' ' + dupes + ' duplicates skipped.' : ''}${skipped ? ' ' + skipped + ' blank rows skipped.' : ''}`,
+        'success');
+    } catch(err) {
+      console.error('Incident import error:', err);
+      showBannerFor('incident-import-status', 'incident-import-text', 'Import failed: ' + err.message, 'error');
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function importPartsCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  showBannerFor('parts-import-status', 'parts-import-text', 'Reading file...', 'success');
+  const reader = new FileReader();
+  reader.onerror = () => showBannerFor('parts-import-status', 'parts-import-text', 'Error reading file.', 'error');
+  reader.onload = function(e) {
+    try {
+      const lines = e.target.result.split('\n').filter(l => l.trim());
+      if (lines.length < 2) { showBannerFor('parts-import-status', 'parts-import-text', 'File appears empty.', 'error'); return; }
+
+      const header = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+
+      // Accept our own export format OR the TDT Part Center CSV column names
+      const idx = {
+        type   : header.findIndex(h => /part.?type|type/i.test(h)),
+        mfr    : header.findIndex(h => /manufacturer|mfr/i.test(h)),
+        name   : header.findIndex(h => /part.?name|name/i.test(h)),
+        value  : header.findIndex(h => /value|cost|price/i.test(h)),
+        stock  : header.findIndex(h => /^stock|qty|quantity|on.?hand/i.test(h)),
+        fru    : header.findIndex(h => /fru|model.?#|part.?num/i.test(h)),
+        models : header.findIndex(h => /compatible|models/i.test(h)),
+        vendor : header.findIndex(h => /vendor|supplier/i.test(h)),
+      };
+
+      if (idx.name === -1) {
+        showBannerFor('parts-import-status', 'parts-import-text', 'Could not find a Part Name column.', 'error');
+        return;
+      }
+
+      function parseRow(line) {
+        const cols = []; let cur = '', inQ = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') { inQ = !inQ; }
+          else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
+          else { cur += ch; }
+        }
+        cols.push(cur.trim());
+        return cols;
+      }
+      function col(cols, i) { return (i !== -1 && cols[i] !== undefined) ? cols[i].trim() : ''; }
+
+      const existingNames = new Set(partsInventory.map(p => p.name.toLowerCase()));
+      let added = 0, dupes = 0, skipped = 0;
+
+      for (let i = 1; i < lines.length; i++) {
+        const cols = parseRow(lines[i]);
+        const name = col(cols, idx.name);
+        if (!name || name === 'TOTAL INVENTORY VALUE') { skipped++; continue; }
+        if (existingNames.has(name.toLowerCase())) { dupes++; continue; }
+
+        const rawValue = col(cols, idx.value).replace(/[$,]/g, '');
+        const part = {
+          id    : 'p' + (nextPartId++),
+          type  : col(cols, idx.type)   || 'Misc',
+          mfr   : col(cols, idx.mfr)    || '',
+          name  : name,
+          value : parseFloat(rawValue)  || 0,
+          stock : parseInt(col(cols, idx.stock), 10) || 0,
+          fru   : col(cols, idx.fru)    || '',
+          models: col(cols, idx.models) || '',
+          vendor: col(cols, idx.vendor) || '',
+        };
+        partsInventory.push(part);
+        existingNames.add(name.toLowerCase());
+        added++;
+      }
+
+      save();
+      renderParts();
+      syncPartsToSheet();
+      showBannerFor('parts-import-status', 'parts-import-text',
+        `✓ Imported ${added} part${added !== 1 ? 's' : ''}.${dupes ? ' ' + dupes + ' duplicate names skipped.' : ''}${skipped ? ' ' + skipped + ' blank rows skipped.' : ''} Syncing to Sheet...`,
+        'success');
+    } catch(err) {
+      console.error('Parts import error:', err);
+      showBannerFor('parts-import-status', 'parts-import-text', 'Import failed: ' + err.message, 'error');
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
 }
 
 function clearLoaners() {

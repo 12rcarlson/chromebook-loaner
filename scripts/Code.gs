@@ -6,10 +6,14 @@
  *
  * Sheet tabs:
  *   "Checkouts"     - one row per loaner transaction
- *   "Inventory"     - loaner device pool (synced from the app)
- *   "All Inventory" - full device inventory (synced on CSV import + edits)
- *   "Parts"         - parts inventory (synced from the app)
+ *   "Inventory"     - loaner device pool
+ *   "All Inventory" - full device inventory
+ *   "Parts"         - parts inventory
  *   "Log"           - raw request log
+ *
+ * Sync strategy:
+ *   Single record changes  → targeted upsert/delete (fast, row-level only)
+ *   Bulk CSV imports       → full sheet rewrite (necessary for large sets)
  */
 
 const SPREADSHEET_ID      = '1jgE9Qt7-lsntIIxjake_Plh2eUwj2P3TkHaORgSzxvA';
@@ -38,7 +42,10 @@ const PARTS_HEADERS = [
   'FRU / Model #', 'Compatible Models', 'Previous Vendor', 'Line Total ($)', 'Last Updated'
 ];
 
-// --- Shared response helper --------------------------------------------------
+// Column K (11) stores the internal app part ID — hidden helper, not shown to users
+const PART_ID_COL = 11;
+
+// ─── Response helper ──────────────────────────────────────────────────────────
 
 function jsonResponse(obj) {
   return ContentService
@@ -46,7 +53,7 @@ function jsonResponse(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// --- Entry points ------------------------------------------------------------
+// ─── Router ───────────────────────────────────────────────────────────────────
 
 function doPost(e) {
   try {
@@ -58,25 +65,9 @@ function doPost(e) {
     } else {
       throw new Error('No data received');
     }
-
     logRequest(data);
-
-    if (data.action === 'checkout') {
-      appendCheckout(data);
-    } else if (data.action === 'return') {
-      markReturned(data.id, data.returnDate);
-    } else if (data.action === 'syncInventory') {
-      syncInventory(JSON.parse(data.devices));
-    } else if (data.action === 'syncAllInventory') {
-      syncAllInventory(JSON.parse(data.devices));
-    } else if (data.action === 'syncParts') {
-      syncParts(JSON.parse(data.parts));
-    } else {
-      throw new Error('Unknown action: ' + data.action);
-    }
-
+    dispatch(data);
     return jsonResponse({ status: 'ok', action: data.action });
-
   } catch (err) {
     Logger.log('doPost error: ' + err.message);
     return jsonResponse({ status: 'error', message: err.message });
@@ -85,89 +76,75 @@ function doPost(e) {
 
 function doGet(e) {
   const action = e.parameter && e.parameter.action;
-
-  if (action === 'checkout') {
+  if (action) {
     try {
-      appendCheckout(e.parameter);
-      logRequest(e.parameter);
-      return jsonResponse({ status: 'ok', action: 'checkout' });
+      const data = Object.assign({}, e.parameter);
+      if (data.devices && typeof data.devices === 'string') data.devices = JSON.parse(data.devices);
+      if (data.device  && typeof data.device  === 'string') data.device  = JSON.parse(data.device);
+      if (data.parts   && typeof data.parts   === 'string') data.parts   = JSON.parse(data.parts);
+      if (data.part    && typeof data.part    === 'string') data.part    = JSON.parse(data.part);
+      logRequest(data);
+      dispatch(data);
+      return jsonResponse({ status: 'ok', action });
     } catch(err) {
-      Logger.log('doGet checkout error: ' + err.message);
+      Logger.log('doGet error: ' + err.message);
       return jsonResponse({ status: 'error', message: err.message });
     }
   }
-
-  if (action === 'return') {
-    try {
-      markReturned(e.parameter.id, e.parameter.returnDate);
-      logRequest(e.parameter);
-      return jsonResponse({ status: 'ok', action: 'return', id: e.parameter.id });
-    } catch(err) {
-      Logger.log('doGet return error: ' + err.message);
-      return jsonResponse({ status: 'error', message: err.message });
-    }
-  }
-
-  if (action === 'syncInventory') {
-    try {
-      const devices = JSON.parse(e.parameter.devices || '[]');
-      syncInventory(devices);
-      logRequest({ action: 'syncInventory', count: devices.length });
-      return jsonResponse({ status: 'ok', action: 'syncInventory', count: devices.length });
-    } catch(err) {
-      Logger.log('doGet syncInventory error: ' + err.message);
-      return jsonResponse({ status: 'error', message: err.message });
-    }
-  }
-
-  if (action === 'syncAllInventory') {
-    try {
-      const devices = JSON.parse(e.parameter.devices || '[]');
-      syncAllInventory(devices);
-      logRequest({ action: 'syncAllInventory', count: devices.length });
-      return jsonResponse({ status: 'ok', action: 'syncAllInventory', count: devices.length });
-    } catch(err) {
-      Logger.log('doGet syncAllInventory error: ' + err.message);
-      return jsonResponse({ status: 'error', message: err.message });
-    }
-  }
-
-  // Default: return all checkouts for reporting
   try {
-    const ss     = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet  = getOrCreateSheet(ss, CHECKOUT_SHEET);
-    const values = sheet.getDataRange().getValues();
-    return jsonResponse(values);
+    const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = getOrCreateSheet(ss, CHECKOUT_SHEET);
+    return jsonResponse(sheet.getDataRange().getValues());
   } catch(err) {
     return jsonResponse({ status: 'error', message: err.message });
   }
 }
 
-// --- Sheet helpers -----------------------------------------------------------
+function dispatch(data) {
+  switch (data.action) {
+    // Checkouts (always row-level)
+    case 'checkout':         appendCheckout(data);                                    break;
+    case 'return':           markReturned(data.id, data.returnDate);                  break;
+
+    // Loaner pool — single record
+    case 'upsertDevice':     upsertDevice(data.device);                               break;
+    case 'deleteDevice':     deleteSheetRow(data.assetTag, INVENTORY_SHEET, 1,
+                               INVENTORY_HEADERS.length, inventoryStatusColor, 5);    break;
+
+    // Loaner pool — bulk CSV import
+    case 'syncInventory':    syncInventory(data.devices);                             break;
+
+    // All Inventory — single record
+    case 'upsertAllDevice':  upsertAllDevice(data.device);                            break;
+    case 'deleteAllDevice':  deleteSheetRow(data.assetTag, ALL_INVENTORY_SHEET, 1,
+                               ALL_INVENTORY_HEADERS.length, allInventoryStatusColor, 6); break;
+
+    // All Inventory — bulk CSV import
+    case 'syncAllInventory': syncAllInventory(data.devices);                          break;
+
+    // Parts — single record
+    case 'upsertPart':       upsertPart(data.part);                                   break;
+    case 'deletePart':       deletePart(data.partId);                                 break;
+
+    // Parts — full refresh (exported CSV re-import, or clear-all)
+    case 'syncParts':        syncParts(data.parts);                                   break;
+
+    default: throw new Error('Unknown action: ' + data.action);
+  }
+}
+
+// ─── Checkouts ────────────────────────────────────────────────────────────────
 
 function appendCheckout(d) {
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, CHECKOUT_SHEET);
-
   ensureHeaders(sheet, CHECKOUT_HEADERS);
-
   sheet.appendRow([
-    d.id,
-    d.studentName      || '',
-    d.grade            || '',
-    d.building         || '',
-    d.assetTag         || '',
-    d.serial           || '',
-    d.type             || '',
-    d.damagedPart      || '',
-    d.originalAssetTag || '',
-    d.date             || '',
-    d.due              || '',
-    'Active',
-    '',
-    d.notes            || ''
+    d.id, d.studentName || '', d.grade || '', d.building || '',
+    d.assetTag || '', d.serial || '', d.type || '', d.damagedPart || '',
+    d.originalAssetTag || '', d.date || '', d.due || '',
+    'Active', '', d.notes || ''
   ]);
-
   formatLastRow(sheet);
   conditionalFormat(sheet);
 }
@@ -176,11 +153,8 @@ function markReturned(id, returnDate) {
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, CHECKOUT_SHEET);
   const data  = sheet.getDataRange().getValues();
-
-  const headers   = data[0];
-  const statusCol = headers.indexOf('Status') + 1;
-  const returnCol = headers.indexOf('Return Date') + 1;
-
+  const statusCol = data[0].indexOf('Status') + 1;
+  const returnCol = data[0].indexOf('Return Date') + 1;
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]) === String(id)) {
       if (statusCol) sheet.getRange(i + 1, statusCol).setValue('Returned');
@@ -190,191 +164,305 @@ function markReturned(id, returnDate) {
   }
 }
 
-// Replaces the entire Inventory sheet with the current loaner pool from the app.
-// Called whenever a loaner device is added, removed, edited, or status changes.
+// ─── Loaner Inventory — targeted upsert ──────────────────────────────────────
+
+function upsertDevice(d) {
+  const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = getOrCreateSheet(ss, INVENTORY_SHEET);
+  const now   = new Date().toLocaleString('en-US');
+  ensureHeaders(sheet, INVENTORY_HEADERS);
+
+  const row = [
+    d.assetTag || '', d.serial || '', d.model || '',
+    d.building || '', d.status || '', now
+  ];
+
+  const rowNum = findRowByKey(sheet, d.assetTag, 1);
+  if (rowNum) {
+    sheet.getRange(rowNum, 1, 1, INVENTORY_HEADERS.length).setValues([row]);
+    styleInventoryRow(sheet, rowNum, d.status);
+  } else {
+    sheet.appendRow(row);
+    styleInventoryRow(sheet, sheet.getLastRow(), d.status);
+  }
+  SpreadsheetApp.flush();
+}
+
+function styleInventoryRow(sheet, rowNum, status) {
+  const bg = rowNum % 2 === 0 ? '#f8f7f4' : null;
+  sheet.getRange(rowNum, 1, 1, 4).setBackground(bg);
+  sheet.getRange(rowNum, 6, 1, 1).setBackground(bg);
+  sheet.getRange(rowNum, 5, 1, 1).setBackground(inventoryStatusColor(status));
+}
+
+function inventoryStatusColor(status) {
+  switch (String(status)) {
+    case 'Available':    return '#e1f5ee';
+    case 'On Loan':      return '#e6f1fb';
+    case 'Loaner':       return '#e6f1fb';
+    case 'Daily Loaner': return '#e6f1fb';
+    case 'Needs Repair': return '#fcebeb';
+    default:             return '#f1efe8';
+  }
+}
+
+// ─── All Inventory — targeted upsert ─────────────────────────────────────────
+
+function upsertAllDevice(d) {
+  const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = getOrCreateSheet(ss, ALL_INVENTORY_SHEET);
+  const now   = new Date().toLocaleString('en-US');
+  ensureHeaders(sheet, ALL_INVENTORY_HEADERS);
+
+  const row = [
+    d.assetTag || '', d.serial || '', d.model || '',
+    d.building || '', d.owner || '', d.status || '', now
+  ];
+
+  const rowNum = findRowByKey(sheet, d.assetTag, 1);
+  if (rowNum) {
+    sheet.getRange(rowNum, 1, 1, ALL_INVENTORY_HEADERS.length).setValues([row]);
+    styleAllInventoryRow(sheet, rowNum, d.status);
+  } else {
+    sheet.appendRow(row);
+    styleAllInventoryRow(sheet, sheet.getLastRow(), d.status);
+  }
+  SpreadsheetApp.flush();
+}
+
+function styleAllInventoryRow(sheet, rowNum, status) {
+  const bg = rowNum % 2 === 0 ? '#f8f7f4' : null;
+  sheet.getRange(rowNum, 1, 1, 5).setBackground(bg);
+  sheet.getRange(rowNum, 7, 1, 1).setBackground(bg);
+  sheet.getRange(rowNum, 6, 1, 1).setBackground(allInventoryStatusColor(status));
+}
+
+function allInventoryStatusColor(status) {
+  switch (String(status)) {
+    case 'Assigned':     return '#e6f1fb';
+    case 'Unassigned':   return '#e1f5ee';
+    case 'Loaner':       return '#faeeda';
+    case 'Daily Loaner': return '#faeeda';
+    case 'Needs Repair': return '#fcebeb';
+    default:             return '#f1efe8';
+  }
+}
+
+// ─── Shared row delete (Inventory + All Inventory) ────────────────────────────
+
+/**
+ * Delete a row identified by `key` in `keyCol`, then restripe shifted rows.
+ * statusCol is the 1-indexed column holding the status value for color coding.
+ */
+function deleteSheetRow(key, sheetName, keyCol, numCols, statusColorFn, statusCol) {
+  const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = getOrCreateSheet(ss, sheetName);
+  const rowNum = findRowByKey(sheet, key, keyCol);
+  if (!rowNum) return;
+  sheet.deleteRow(rowNum);
+  restripeFrom(sheet, rowNum, numCols, statusCol, statusColorFn,
+    sheetName === PARTS_SHEET ? '#ffffff' : null);
+  SpreadsheetApp.flush();
+}
+
+// ─── Parts — targeted upsert / delete ────────────────────────────────────────
+
+function upsertPart(p) {
+  const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = getOrCreateSheet(ss, PARTS_SHEET);
+  const now   = new Date().toLocaleString('en-US');
+  ensureHeaders(sheet, PARTS_HEADERS);
+
+  const value    = Number(p.value) || 0;
+  const stock    = Number(p.stock) || 0;
+  const lineTotal = Number((value * stock).toFixed(2));
+
+  const row = [
+    p.type || '', p.mfr || '', p.name || '',
+    value, stock, p.fru || '', p.models || '', p.vendor || '',
+    lineTotal, now
+  ];
+
+  let rowNum = p.id ? findRowByKey(sheet, p.id, PART_ID_COL) : null;
+  if (rowNum) {
+    sheet.getRange(rowNum, 1, 1, PARTS_HEADERS.length).setValues([row]);
+  } else {
+    sheet.appendRow(row);
+    rowNum = sheet.getLastRow();
+    sheet.getRange(rowNum, PART_ID_COL).setValue(p.id || '');
+  }
+
+  stylePartsRow(sheet, rowNum, stock);
+  sheet.getRange(rowNum, 4, 1, 1).setNumberFormat('$#,##0.00');
+  sheet.getRange(rowNum, 9, 1, 1).setNumberFormat('$#,##0.00');
+  updatePartsTotalsRow(sheet);
+  SpreadsheetApp.flush();
+}
+
+function deletePart(partId) {
+  const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = getOrCreateSheet(ss, PARTS_SHEET);
+  const rowNum = findRowByKey(sheet, partId, PART_ID_COL);
+  if (!rowNum) return;
+  sheet.deleteRow(rowNum);
+  restripeFrom(sheet, rowNum, PARTS_HEADERS.length, 5, stockStatusColor, '#ffffff');
+  updatePartsTotalsRow(sheet);
+  SpreadsheetApp.flush();
+}
+
+function stylePartsRow(sheet, rowNum, stock) {
+  const bg = rowNum % 2 === 0 ? '#f8f7f4' : '#ffffff';
+  sheet.getRange(rowNum, 1, 1, PARTS_HEADERS.length).setBackground(bg);
+  sheet.getRange(rowNum, 5, 1, 1).setBackground(stockStatusColor(stock));
+}
+
+function stockStatusColor(stock) {
+  const s = Number(stock) || 0;
+  if (s === 0)  return '#fcebeb';
+  if (s <= 2)   return '#faeeda';
+  return '#e1f5ee';
+}
+
+function updatePartsTotalsRow(sheet) {
+  // Remove any existing totals row
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+  const colC = sheet.getRange(2, 3, lastRow - 1, 1).getValues();
+  for (let i = colC.length - 1; i >= 0; i--) {
+    if (String(colC[i][0]).trim() === 'TOTAL INVENTORY VALUE') {
+      sheet.deleteRow(i + 2);
+      break;
+    }
+  }
+  const dataRows = sheet.getLastRow();
+  const totalRow = dataRows + 1;
+  sheet.getRange(totalRow, 3).setValue('TOTAL INVENTORY VALUE').setFontWeight('bold');
+  sheet.getRange(totalRow, 9)
+    .setFormula(`=SUM(I2:I${dataRows})`)
+    .setNumberFormat('$#,##0.00')
+    .setFontWeight('bold')
+    .setBackground('#1a56a0')
+    .setFontColor('#ffffff');
+}
+
+// ─── Bulk full-rewrite (CSV imports only) ─────────────────────────────────────
+
 function syncInventory(devices) {
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, INVENTORY_SHEET);
   const now   = new Date().toLocaleString('en-US');
-
-  const lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    sheet.getRange(2, 1, lastRow - 1, INVENTORY_HEADERS.length).clearContent();
-  }
-
+  clearDataRows(sheet, INVENTORY_HEADERS.length);
   ensureHeaders(sheet, INVENTORY_HEADERS);
-
   if (!devices || !devices.length) return;
 
   const rows = devices.map(d => [
-    d.assetTag  || '',
-    d.serial    || '',
-    d.model     || '',
-    d.building  || '',
-    d.status    || '',
-    now
+    d.assetTag || '', d.serial || '', d.model || '',
+    d.building || '', d.status || '', now
   ]);
-
   sheet.getRange(2, 1, rows.length, INVENTORY_HEADERS.length).setValues(rows);
-
-  const statusRange = sheet.getRange(2, 5, rows.length, 1);
-  const backgrounds = rows.map(r => {
-    switch(r[4]) {
-      case 'Available':    return ['#e1f5ee'];
-      case 'On Loan':      return ['#e6f1fb'];
-      case 'Loaner':       return ['#e6f1fb'];
-      case 'Daily Loaner': return ['#e6f1fb'];
-      case 'Needs Repair': return ['#fcebeb'];
-      default:             return ['#f1efe8'];
-    }
-  });
-  statusRange.setBackgrounds(backgrounds);
-
+  sheet.getRange(2, 5, rows.length, 1).setBackgrounds(rows.map(r => [inventoryStatusColor(r[4])]));
   for (let i = 0; i < rows.length; i++) {
-    if (i % 2 === 0) {
-      sheet.getRange(i + 2, 1, 1, 4).setBackground('#f8f7f4');
-    } else {
-      sheet.getRange(i + 2, 1, 1, 4).setBackground(null);
-    }
+    const bg = i % 2 === 0 ? '#f8f7f4' : null;
+    sheet.getRange(i + 2, 1, 1, 4).setBackground(bg);
+    sheet.getRange(i + 2, 6, 1, 1).setBackground(bg);
   }
-
   sheet.setColumnWidths(1, INVENTORY_HEADERS.length, 140);
   SpreadsheetApp.flush();
 }
 
-// Replaces the entire "All Inventory" sheet with the full device inventory from the app.
-// Called whenever a TDT CSV is imported, or a device is edited/deleted in Full Inventory.
 function syncAllInventory(devices) {
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, ALL_INVENTORY_SHEET);
   const now   = new Date().toLocaleString('en-US');
-
-  const lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    sheet.getRange(2, 1, lastRow - 1, ALL_INVENTORY_HEADERS.length).clearContent();
-    sheet.getRange(2, 1, lastRow - 1, ALL_INVENTORY_HEADERS.length).setBackground(null);
-  }
-
+  clearDataRows(sheet, ALL_INVENTORY_HEADERS.length);
   ensureHeaders(sheet, ALL_INVENTORY_HEADERS);
-
   if (!devices || !devices.length) return;
 
   const rows = devices.map(d => [
-    d.assetTag  || '',
-    d.serial    || '',
-    d.model     || '',
-    d.building  || '',
-    d.owner     || '',
-    d.status    || '',
-    now
+    d.assetTag || '', d.serial || '', d.model || '',
+    d.building || '', d.owner || '', d.status || '', now
   ]);
-
   sheet.getRange(2, 1, rows.length, ALL_INVENTORY_HEADERS.length).setValues(rows);
-
-  // Color-code the Status column (F = col 6) based on value
-  const statusRange = sheet.getRange(2, 6, rows.length, 1);
-  const backgrounds = rows.map(r => {
-    switch(r[5]) {
-      case 'Assigned':     return ['#e6f1fb'];
-      case 'Unassigned':   return ['#e1f5ee'];
-      case 'Loaner':       return ['#faeeda'];
-      case 'Daily Loaner': return ['#faeeda'];
-      case 'Needs Repair': return ['#fcebeb'];
-      default:             return ['#f1efe8'];
-    }
-  });
-  statusRange.setBackgrounds(backgrounds);
-
-  // Alternate row shading on non-status columns
+  const statusBgs = rows.map(r => [allInventoryStatusColor(r[5])]);
+  sheet.getRange(2, 6, rows.length, 1).setBackgrounds(statusBgs);
   for (let i = 0; i < rows.length; i++) {
     const bg = i % 2 === 0 ? '#f8f7f4' : null;
-    // Cols 1-5 (Asset Tag through Assigned To)
     sheet.getRange(i + 2, 1, 1, 5).setBackground(bg);
-    // Re-apply status color (col 6)
-    const statusBg = backgrounds[i][0];
-    sheet.getRange(i + 2, 6, 1, 1).setBackground(statusBg);
-    // Last Updated col (7) — clear/alternate
     sheet.getRange(i + 2, 7, 1, 1).setBackground(bg);
+    sheet.getRange(i + 2, 6, 1, 1).setBackground(statusBgs[i][0]);
   }
-
   sheet.setColumnWidths(1, ALL_INVENTORY_HEADERS.length, 140);
-  sheet.setColumnWidth(3, 200); // Model — wider
-  sheet.setColumnWidth(4, 220); // Building — wider
-  sheet.setColumnWidth(5, 180); // Assigned To — wider
+  sheet.setColumnWidth(3, 200); sheet.setColumnWidth(4, 220); sheet.setColumnWidth(5, 180);
   SpreadsheetApp.flush();
 }
 
-// Replaces the entire Parts sheet with the current parts inventory from the app.
-// Called whenever a part is added, removed, or edited.
 function syncParts(parts) {
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, PARTS_SHEET);
   const now   = new Date().toLocaleString('en-US');
-
-  const lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    sheet.getRange(2, 1, lastRow - 1, PARTS_HEADERS.length).clearContent();
-    sheet.getRange(2, 1, lastRow - 1, PARTS_HEADERS.length).setBackground(null);
-  }
-
+  clearDataRows(sheet, PARTS_HEADERS.length + 1);
   ensureHeaders(sheet, PARTS_HEADERS);
-
   if (!parts || !parts.length) return;
 
   const rows = parts.map(p => {
-    const value    = Number(p.value)  || 0;
-    const stock    = Number(p.stock)  || 0;
-    const lineTotal = (value * stock).toFixed(2);
+    const value = Number(p.value) || 0;
+    const stock = Number(p.stock) || 0;
     return [
-      p.type    || '',
-      p.mfr     || '',
-      p.name    || '',
-      value,
-      stock,
-      p.fru     || '',
-      p.models  || '',
-      p.vendor  || '',
-      Number(lineTotal),
-      now
+      p.type || '', p.mfr || '', p.name || '',
+      value, stock, p.fru || '', p.models || '', p.vendor || '',
+      Number((value * stock).toFixed(2)), now
     ];
   });
-
   sheet.getRange(2, 1, rows.length, PARTS_HEADERS.length).setValues(rows);
-
+  sheet.getRange(2, PART_ID_COL, rows.length, 1).setValues(parts.map(p => [p.id || '']));
   sheet.getRange(2, 4, rows.length, 1).setNumberFormat('$#,##0.00');
   sheet.getRange(2, 9, rows.length, 1).setNumberFormat('$#,##0.00');
-
-  const stockRange   = sheet.getRange(2, 5, rows.length, 1);
-  const stockBgColors = rows.map(r => {
-    const s = Number(r[4]) || 0;
-    if (s === 0)  return ['#fcebeb'];
-    if (s <= 2)   return ['#faeeda'];
-    return ['#e1f5ee'];
-  });
-  stockRange.setBackgrounds(stockBgColors);
-
+  sheet.getRange(2, 5, rows.length, 1).setBackgrounds(rows.map(r => [stockStatusColor(r[4])]));
   for (let i = 0; i < rows.length; i++) {
     const bg = i % 2 === 0 ? '#f8f7f4' : '#ffffff';
     sheet.getRange(i + 2, 1, 1, PARTS_HEADERS.length).setBackground(bg);
-    const s = Number(rows[i][4]) || 0;
-    const stockBg = s === 0 ? '#fcebeb' : s <= 2 ? '#faeeda' : '#e1f5ee';
-    sheet.getRange(i + 2, 5, 1, 1).setBackground(stockBg);
+    sheet.getRange(i + 2, 5, 1, 1).setBackground(stockStatusColor(rows[i][4]));
   }
-
-  const totalRow = rows.length + 2;
-  sheet.getRange(totalRow, 3, 1, 1).setValue('TOTAL INVENTORY VALUE');
-  sheet.getRange(totalRow, 3, 1, 1).setFontWeight('bold');
-  const totalValueFormula = `=SUM(I2:I${rows.length + 1})`;
-  sheet.getRange(totalRow, 9, 1, 1).setFormula(totalValueFormula);
-  sheet.getRange(totalRow, 9, 1, 1).setNumberFormat('$#,##0.00');
-  sheet.getRange(totalRow, 9, 1, 1).setFontWeight('bold');
-  sheet.getRange(totalRow, 9, 1, 1).setBackground('#1a56a0');
-  sheet.getRange(totalRow, 9, 1, 1).setFontColor('#ffffff');
-
+  updatePartsTotalsRow(sheet);
   sheet.setColumnWidths(1, PARTS_HEADERS.length, 140);
-  sheet.setColumnWidth(3, 220);
-  sheet.setColumnWidth(7, 200);
+  sheet.setColumnWidth(3, 220); sheet.setColumnWidth(7, 200);
   SpreadsheetApp.flush();
+}
+
+// ─── Utility helpers ──────────────────────────────────────────────────────────
+
+/** Find 1-indexed sheet row where colIndex matches key. Returns null if not found. */
+function findRowByKey(sheet, key, colIndex) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  const vals = sheet.getRange(2, colIndex, lastRow - 1, 1).getValues();
+  for (let i = 0; i < vals.length; i++) {
+    if (String(vals[i][0]).trim() === String(key).trim()) return i + 2;
+  }
+  return null;
+}
+
+/** Re-apply alternating row shading from fromRow to end, fixing colors after a delete. */
+function restripeFrom(sheet, fromRow, numCols, statusCol, statusColorFn, oddBg) {
+  const lastRow = sheet.getLastRow();
+  if (fromRow > lastRow) return;
+  const count = lastRow - fromRow + 1;
+  const vals  = sheet.getRange(fromRow, 1, count, numCols).getValues();
+  for (let i = 0; i < count; i++) {
+    const rowNum = fromRow + i;
+    const bg = rowNum % 2 === 0 ? '#f8f7f4' : (oddBg || null);
+    sheet.getRange(rowNum, 1, 1, numCols).setBackground(bg);
+    const statusVal = vals[i][statusCol - 1];
+    sheet.getRange(rowNum, statusCol, 1, 1).setBackground(statusColorFn(statusVal));
+  }
+}
+
+/** Clear all data rows (row 2 onward) content and background. */
+function clearDataRows(sheet, numCols) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, numCols).clearContent().setBackground(null);
+  }
 }
 
 function logRequest(data) {
@@ -384,61 +472,46 @@ function logRequest(data) {
   sheet.appendRow([new Date().toISOString(), data.action || 'unknown', JSON.stringify(data)]);
 }
 
-// --- Formatting helpers ------------------------------------------------------
+// ─── Formatting helpers ───────────────────────────────────────────────────────
 
 function ensureHeaders(sheet, headers) {
-  const hasRows  = sheet.getLastRow() > 0;
-  const firstRow = hasRows ? sheet.getRange(1, 1, 1, headers.length).getValues()[0] : [];
+  const hasRows     = sheet.getLastRow() > 0;
+  const firstRow    = hasRows ? sheet.getRange(1, 1, 1, headers.length).getValues()[0] : [];
   const headersMatch = headers.every((h, i) => firstRow[i] === h);
   if (!headersMatch) {
-    const headerRange = sheet.getRange(1, 1, 1, headers.length);
-    headerRange.setValues([headers]);
-    headerRange.setFontWeight('bold');
-    headerRange.setBackground('#1a56a0');
-    headerRange.setFontColor('#ffffff');
+    const r = sheet.getRange(1, 1, 1, headers.length);
+    r.setValues([headers]).setFontWeight('bold').setBackground('#1a56a0').setFontColor('#ffffff');
     sheet.setFrozenRows(1);
   }
 }
 
 function formatLastRow(sheet) {
-  const row   = sheet.getLastRow();
-  const range = sheet.getRange(row, 1, 1, sheet.getLastColumn());
-  range.setVerticalAlignment('middle');
-  if (row % 2 === 0) range.setBackground('#f8f7f4');
+  const row = sheet.getLastRow();
+  sheet.getRange(row, 1, 1, sheet.getLastColumn())
+    .setVerticalAlignment('middle')
+    .setBackground(row % 2 === 0 ? '#f8f7f4' : null);
 }
 
 function conditionalFormat(sheet) {
   const range = sheet.getRange('L2:L1000');
-
-  const activeRule = SpreadsheetApp.newConditionalFormatRule()
-    .whenTextEqualTo('Active')
-    .setBackground('#e1f5ee')
-    .setFontColor('#085041')
-    .setRanges([range])
-    .build();
-
-  const returnedRule = SpreadsheetApp.newConditionalFormatRule()
-    .whenTextEqualTo('Returned')
-    .setBackground('#f1efe8')
-    .setFontColor('#5f5e5a')
-    .setRanges([range])
-    .build();
-
+  const active   = SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Active')
+    .setBackground('#e1f5ee').setFontColor('#085041').setRanges([range]).build();
+  const returned = SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Returned')
+    .setBackground('#f1efe8').setFontColor('#5f5e5a').setRanges([range]).build();
   const existing = sheet.getConditionalFormatRules().filter(r => {
-    const boolCond = r.getBooleanCondition();
-    if (!boolCond) return true;
-    const val = boolCond.getCriteriaValues()[0];
-    return val !== 'Active' && val !== 'Returned';
+    const bc = r.getBooleanCondition();
+    if (!bc) return true;
+    const v = bc.getCriteriaValues()[0];
+    return v !== 'Active' && v !== 'Returned';
   });
-
-  sheet.setConditionalFormatRules([...existing, activeRule, returnedRule]);
+  sheet.setConditionalFormatRules([...existing, active, returned]);
 }
 
 function getOrCreateSheet(ss, name) {
   return ss.getSheetByName(name) || ss.insertSheet(name);
 }
 
-// --- One-time setup (run manually once) -------------------------------------
+// ─── One-time setup ───────────────────────────────────────────────────────────
 
 function setupSpreadsheet() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -446,8 +519,7 @@ function setupSpreadsheet() {
   const cs = getOrCreateSheet(ss, CHECKOUT_SHEET);
   ensureHeaders(cs, CHECKOUT_HEADERS);
   cs.setColumnWidths(1, CHECKOUT_HEADERS.length, 130);
-  cs.setColumnWidth(2, 160);
-  cs.setColumnWidth(4, 220);
+  cs.setColumnWidth(2, 160); cs.setColumnWidth(4, 220);
 
   const inv = getOrCreateSheet(ss, INVENTORY_SHEET);
   ensureHeaders(inv, INVENTORY_HEADERS);
@@ -456,37 +528,26 @@ function setupSpreadsheet() {
   const allInv = getOrCreateSheet(ss, ALL_INVENTORY_SHEET);
   ensureHeaders(allInv, ALL_INVENTORY_HEADERS);
   allInv.setColumnWidths(1, ALL_INVENTORY_HEADERS.length, 140);
-  allInv.setColumnWidth(3, 200);
-  allInv.setColumnWidth(4, 220);
-  allInv.setColumnWidth(5, 180);
+  allInv.setColumnWidth(3, 200); allInv.setColumnWidth(4, 220); allInv.setColumnWidth(5, 180);
 
   const parts = getOrCreateSheet(ss, PARTS_SHEET);
   ensureHeaders(parts, PARTS_HEADERS);
   parts.setColumnWidths(1, PARTS_HEADERS.length, 140);
-  parts.setColumnWidth(3, 220);
-  parts.setColumnWidth(7, 200);
+  parts.setColumnWidth(3, 220); parts.setColumnWidth(7, 200);
+  parts.hideColumns(PART_ID_COL); // hide the internal ID column
 
   SpreadsheetApp.flush();
   Logger.log('Setup complete.');
 }
 
-// --- Fix existing sheet headers (run once if you already have data) ----------
-
 function updateCheckoutHeaders() {
-  const ss      = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet   = getOrCreateSheet(ss, CHECKOUT_SHEET);
-  const lastCol = CHECKOUT_HEADERS.length;
-
-  const headerRange = sheet.getRange(1, 1, 1, lastCol);
-  headerRange.setValues([CHECKOUT_HEADERS]);
-  headerRange.setFontWeight('bold');
-  headerRange.setBackground('#1a56a0');
-  headerRange.setFontColor('#ffffff');
+  const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = getOrCreateSheet(ss, CHECKOUT_SHEET);
+  const r     = sheet.getRange(1, 1, 1, CHECKOUT_HEADERS.length);
+  r.setValues([CHECKOUT_HEADERS]).setFontWeight('bold').setBackground('#1a56a0').setFontColor('#ffffff');
   sheet.setFrozenRows(1);
-  sheet.setColumnWidths(1, lastCol, 130);
-  sheet.setColumnWidth(2, 160);
-  sheet.setColumnWidth(4, 220);
-
+  sheet.setColumnWidths(1, CHECKOUT_HEADERS.length, 130);
+  sheet.setColumnWidth(2, 160); sheet.setColumnWidth(4, 220);
   SpreadsheetApp.flush();
   Logger.log('Headers updated.');
 }

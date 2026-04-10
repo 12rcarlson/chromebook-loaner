@@ -1212,7 +1212,7 @@ function submitCheckout() {
 
   save();
   sendToSheet(record);
-  syncInventoryToSheet();
+  if (dev) upsertDeviceToSheet(dev); // only update the one device that changed
   clearCheckoutForm();
   refreshAll();
   showToast('Checkout saved!', 'success');
@@ -1228,7 +1228,7 @@ function returnDevice(id) {
   save();
   refreshAll();
   sendReturnToSheet(rec);
-  syncInventoryToSheet();
+  if (dev) upsertDeviceToSheet(dev); // only update the one device that changed
   showToast('Device marked as returned.', 'success');
 }
 
@@ -1247,12 +1247,13 @@ function addDevice() {
   const building = document.getElementById('inv-building').value;
   if (!asset) { showToast('Asset tag required.', 'error'); return; }
   if (inventory.find(d => d.assetTag === asset)) { showToast('Asset tag already exists.', 'error'); return; }
-  inventory.push({ assetTag: asset, serial, model, building, status: 'Available' });
+  const newDev = { assetTag: asset, serial, model, building, status: 'Available' };
+  inventory.push(newDev);
   save();
   renderLoaners();
   renderAvailable();
   renderStats();
-  syncInventoryToSheet();
+  upsertDeviceToSheet(newDev); // only push the new row
   document.getElementById('inv-asset').value  = '';
   document.getElementById('inv-serial').value = '';
   document.getElementById('inv-model').value  = '';
@@ -1265,7 +1266,7 @@ function removeDevice(tag) {
   save();
   renderLoaners();
   renderStats();
-  syncInventoryToSheet();
+  deleteDeviceFromSheet(tag); // only delete that row
   showToast('Device removed.');
 }
 
@@ -1398,7 +1399,7 @@ function removeAllInvDevice(tag) {
   allInventory = allInventory.filter(d => d.assetTag !== tag);
   save();
   renderAllInventory();
-  syncAllInventoryToSheet();
+  deleteAllDeviceFromSheet(tag); // only delete that row
   showToast('Device deleted.');
 }
 
@@ -1493,56 +1494,75 @@ async function sendReturnToSheet(record) {
   } catch(e) { console.warn('Sheet sync failed:', e); }
 }
 
-// ── Inventory sync to Google Sheets ─────────────────────────────────────────
+// ── Google Sheet sync helpers ─────────────────────────────────────────────────
+//
+//  Strategy:
+//    Single-record ops  → targeted upsert/delete (touches only the affected row)
+//    Bulk CSV imports   → full sheet rewrite (syncInventory / syncAllInventory)
+//
+// ─────────────────────────────────────────────────────────────────────────────
 
+async function sheetPost(payload) {
+  if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
+  try {
+    const body = new URLSearchParams({ payload: JSON.stringify(payload) });
+    const res  = await fetch(SHEET_URL, { method: 'POST', body });
+    const json = await res.json();
+    if (json.status !== 'ok') console.error('Sheet sync error:', payload.action, json.message);
+  } catch(e) {
+    console.error('Sheet sync failed:', payload.action, e);
+  }
+}
+
+// ── Loaner pool (Inventory sheet) ────────────────────────────────────────────
+
+/** Upsert one device row by Asset Tag. Called on add / inline edit / status change. */
+async function upsertDeviceToSheet(device) {
+  await sheetPost({ action: 'upsertDevice', device });
+}
+
+/** Delete one device row by Asset Tag. Called on Remove. */
+async function deleteDeviceFromSheet(assetTag) {
+  await sheetPost({ action: 'deleteDevice', assetTag });
+}
+
+/** Full rewrite — used only after a bulk CSV import into the loaner pool. */
 async function syncInventoryToSheet() {
-  if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
-  try {
-    const body = new URLSearchParams({
-      payload: JSON.stringify({ action: 'syncInventory', devices: JSON.stringify(inventory) })
-    });
-    const res  = await fetch(SHEET_URL, { method: 'POST', body });
-    const json = await res.json();
-    if (json.status !== 'ok') {
-      console.error('Inventory sync error:', json.message);
-    }
-  } catch(e) {
-    console.error('Inventory sync failed:', e);
-  }
+  await sheetPost({ action: 'syncInventory', devices: inventory });
 }
 
-// Syncs the Full Device Inventory (allInventory) to the "All Inventory" sheet.
-// Called after CSV import, inline edits, and device deletions in Full Inventory.
+// ── Full Device Inventory (All Inventory sheet) ───────────────────────────────
+
+/** Upsert one device row by Asset Tag. Called on inline edit / single delete. */
+async function upsertAllDeviceToSheet(device) {
+  await sheetPost({ action: 'upsertAllDevice', device });
+}
+
+/** Delete one device row by Asset Tag. Called on Delete button. */
+async function deleteAllDeviceFromSheet(assetTag) {
+  await sheetPost({ action: 'deleteAllDevice', assetTag });
+}
+
+/** Full rewrite — used only after a bulk CSV import into Full Inventory. */
 async function syncAllInventoryToSheet() {
-  if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
-  try {
-    const body = new URLSearchParams({
-      payload: JSON.stringify({ action: 'syncAllInventory', devices: JSON.stringify(allInventory) })
-    });
-    const res  = await fetch(SHEET_URL, { method: 'POST', body });
-    const json = await res.json();
-    if (json.status !== 'ok') {
-      console.error('All Inventory sync error:', json.message);
-    }
-  } catch(e) {
-    console.error('All Inventory sync failed:', e);
-  }
+  await sheetPost({ action: 'syncAllInventory', devices: allInventory });
 }
 
+// ── Parts (Parts sheet) ───────────────────────────────────────────────────────
+
+/** Upsert one part row by internal ID. Called on add / edit. */
+async function upsertPartToSheet(part) {
+  await sheetPost({ action: 'upsertPart', part });
+}
+
+/** Delete one part row by internal ID. Called on delete. */
+async function deletePartFromSheet(partId) {
+  await sheetPost({ action: 'deletePart', partId });
+}
+
+/** Full rewrite — used only on clearParts(). */
 async function syncPartsToSheet() {
-  if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
-  try {
-    const body = new URLSearchParams({
-      payload: JSON.stringify({ action: 'syncParts', parts: JSON.stringify(partsInventory) })
-    });
-    const res  = await fetch(SHEET_URL, { method: 'POST', body });
-    const json = await res.json();
-    if (json.status !== 'ok') {
-      console.error('Parts sync error:', json.message);
-    }
-  } catch(e) {
-    console.error('Parts sync failed:', e);
-  }
+  await sheetPost({ action: 'syncParts', parts: partsInventory });
 }
 
 // ── Inline cell editing ───────────────────────────────────────────────────────
@@ -1603,8 +1623,8 @@ function startCellEdit(td, store, field, assetTag, inputType, options) {
       checkouts.forEach(c => { if (c.assetTag === oldTag) c.assetTag = newVal; });
     }
     save();
-    if (store === 'loaner') { renderLoaners(); syncInventoryToSheet(); }
-    else { renderAllInventory(); syncAllInventoryToSheet(); }
+    if (store === 'loaner') { renderLoaners(); upsertDeviceToSheet(rec); }
+    else { renderAllInventory(); upsertAllDeviceToSheet(rec); }
     renderStats();
     showToast('Saved.', 'success');
   }
@@ -1795,19 +1815,21 @@ function savePart() {
 
   if (!name) { showToast('Part name is required.', 'error'); return; }
 
+  let savedPart;
   if (editingPartId) {
     const p = partsInventory.find(x => x.id === editingPartId);
-    if (p) Object.assign(p, {type, mfr, name, value, stock: isNaN(stock) ? 0 : stock, fru, vendor, models});
+    if (p) { Object.assign(p, {type, mfr, name, value, stock: isNaN(stock) ? 0 : stock, fru, vendor, models}); savedPart = p; }
     showToast('Part updated!', 'success');
   } else {
-    partsInventory.push({ id: 'p' + (nextPartId++), type, mfr, name, value, stock: isNaN(stock) ? 0 : stock, fru, vendor, models });
+    savedPart = { id: 'p' + (nextPartId++), type, mfr, name, value, stock: isNaN(stock) ? 0 : stock, fru, vendor, models };
+    partsInventory.push(savedPart);
     showToast('Part added!', 'success');
   }
 
   save();
   closeAddPart();
   renderParts();
-  syncPartsToSheet();
+  if (savedPart) upsertPartToSheet(savedPart); // only push the affected row
 }
 
 function deletePart(id) {
@@ -1815,7 +1837,7 @@ function deletePart(id) {
   partsInventory = partsInventory.filter(p => p.id !== id);
   save();
   renderParts();
-  syncPartsToSheet();
+  deletePartFromSheet(id); // only delete that row
   showToast('Part removed.');
 }
 

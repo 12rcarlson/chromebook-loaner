@@ -424,9 +424,200 @@
       .two-col { grid-template-columns: 1fr; }
       main { padding: 1rem; }
     }
+
+    /* ── Password Gate ─────────────────────────────────────────────────────── */
+    #auth-overlay {
+      position: fixed;
+      inset: 0;
+      background: #0c1929;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    #auth-overlay .auth-box {
+      background: #ffffff;
+      border-radius: 14px;
+      padding: 2.5rem 2.5rem 2rem;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+      text-align: center;
+    }
+
+    #auth-overlay .auth-logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 1.5rem;
+    }
+
+    #auth-overlay .auth-logo svg { flex-shrink: 0; }
+
+    #auth-overlay .auth-logo-text {
+      font-size: 17px;
+      font-weight: 700;
+      color: #1a56a0;
+      text-align: left;
+      line-height: 1.25;
+    }
+
+    #auth-overlay .auth-logo-text span {
+      display: block;
+      font-size: 12px;
+      font-weight: 400;
+      color: #888780;
+    }
+
+    #auth-overlay h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #2c2c2a;
+      margin-bottom: 0.35rem;
+    }
+
+    #auth-overlay p {
+      font-size: 13px;
+      color: #888780;
+      margin-bottom: 1.5rem;
+    }
+
+    #auth-overlay .pw-wrap {
+      position: relative;
+      margin-bottom: 1rem;
+    }
+
+    #auth-overlay input[type="password"] {
+      width: 100%;
+      padding: 11px 44px 11px 14px;
+      border: 1.5px solid #d3d1c7;
+      border-radius: 8px;
+      font-size: 15px;
+      color: #2c2c2a;
+      background: #f8f7f4;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      font-family: inherit;
+      box-sizing: border-box;
+    }
+
+    #auth-overlay input[type="password"]:focus {
+      outline: none;
+      border-color: #1a56a0;
+      box-shadow: 0 0 0 3px rgba(26,86,160,0.12);
+      background: #fff;
+    }
+
+    #auth-overlay input[type="password"].shake {
+      animation: shake 0.4s ease;
+      border-color: #a32d2d;
+      box-shadow: 0 0 0 3px rgba(163,45,45,0.12);
+    }
+
+    #auth-toggle-pw {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #888780;
+      font-size: 16px;
+      padding: 2px;
+      line-height: 1;
+    }
+
+    #auth-overlay .remember-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 1.25rem;
+      text-align: left;
+    }
+
+    #auth-overlay .remember-row input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: #1a56a0;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    #auth-overlay .remember-row label {
+      font-size: 13px;
+      color: #5f5e5a;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    #auth-overlay .auth-btn {
+      width: 100%;
+      padding: 12px;
+      background: #1a56a0;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      font-family: inherit;
+    }
+
+    #auth-overlay .auth-btn:hover { background: #0c3f7a; }
+
+    #auth-error {
+      font-size: 13px;
+      color: #a32d2d;
+      margin-top: 0.75rem;
+      min-height: 18px;
+    }
+
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20%      { transform: translateX(-6px); }
+      40%      { transform: translateX(6px); }
+      60%      { transform: translateX(-4px); }
+      80%      { transform: translateX(4px); }
+    }
+
+    body.auth-locked { overflow: hidden; }
   </style>
 </head>
-<body>
+<body class="auth-locked">
+
+<!-- ── Password Gate ──────────────────────────────────────────────────────── -->
+<div id="auth-overlay">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <svg width="36" height="36" fill="none" viewBox="0 0 24 24">
+        <rect x="2" y="5" width="20" height="13" rx="2" fill="#1a56a0" opacity="0.15" stroke="#1a56a0" stroke-width="1.5"/>
+        <rect x="8" y="18" width="8" height="2" rx="1" fill="#1a56a0" opacity="0.6"/>
+        <rect x="5" y="8" width="14" height="7" rx="1" fill="#1a56a0" opacity="0.12"/>
+      </svg>
+      <div class="auth-logo-text">
+        Chromebook Loaner System
+        <span>Bureau Valley</span>
+      </div>
+    </div>
+    <h2>Staff Access</h2>
+    <p>Enter your password to continue.</p>
+    <div class="pw-wrap">
+      <input type="password" id="auth-pw" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button id="auth-toggle-pw" type="button" onclick="togglePwVis()" title="Show/hide password">👁</button>
+    </div>
+    <div class="remember-row">
+      <input type="checkbox" id="auth-remember" checked />
+      <label for="auth-remember">Remember this browser for 30 days</label>
+    </div>
+    <button class="auth-btn" onclick="checkAuth()">Sign In</button>
+    <div id="auth-error"></div>
+  </div>
+</div>
 
 <header>
   <div class="brand">
@@ -1866,6 +2057,66 @@ function exportPartsCSV() {
   a.click();
   showToast('Parts CSV exported!', 'success');
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Authentication ────────────────────────────────────────────────────────────
+
+(function initAuth() {
+  const COOKIE_NAME = 'cls_auth';
+  const COOKIE_DAYS = 30;
+
+  function getCookie(name) {
+    const match = document.cookie.split('; ').find(r => r.startsWith(name + '='));
+    return match ? decodeURIComponent(match.split('=')[1]) : null;
+  }
+
+  function setCookie(name, value, days) {
+    const exp = new Date(Date.now() + days * 864e5).toUTCString();
+    document.cookie = `${name}=${encodeURIComponent(value)}; expires=${exp}; path=/; SameSite=Strict`;
+  }
+
+  function unlock() {
+    const overlay = document.getElementById('auth-overlay');
+    overlay.style.transition = 'opacity 0.35s';
+    overlay.style.opacity = '0';
+    setTimeout(() => { overlay.style.display = 'none'; }, 350);
+    document.body.classList.remove('auth-locked');
+  }
+
+  // Check for valid saved session cookie
+  if (getCookie(COOKIE_NAME) === 'granted') {
+    unlock();
+  }
+
+  window.checkAuth = function() {
+    const input    = document.getElementById('auth-pw');
+    const errEl    = document.getElementById('auth-error');
+    const remember = document.getElementById('auth-remember').checked;
+    const entered  = input.value;
+
+    // Password stored obfuscated — not plaintext in DOM
+    if (entered === atob('RyFoMm8zczR0NQ==')) {
+      errEl.textContent = '';
+      if (remember) setCookie(COOKIE_NAME, 'granted', COOKIE_DAYS);
+      unlock();
+    } else {
+      errEl.textContent = 'Incorrect password. Please try again.';
+      input.classList.add('shake');
+      input.value = '';
+      setTimeout(() => input.classList.remove('shake'), 500);
+      input.focus();
+    }
+  };
+
+  window.togglePwVis = function() {
+    const input = document.getElementById('auth-pw');
+    input.type = input.type === 'password' ? 'text' : 'password';
+  };
+
+  // Auto-focus password field
+  setTimeout(() => document.getElementById('auth-pw')?.focus(), 50);
+})();
 
 // ─────────────────────────────────────────────────────────────────────────────
 

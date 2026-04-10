@@ -860,6 +860,7 @@
         <option>Needs Repair</option>
       </select>
       <button class="btn btn-secondary" onclick="openAddDevice()">+ Add Device</button>
+      <button class="btn btn-secondary" onclick="exportLoanersCSV()">⬇ Export CSV</button>
       <button class="btn btn-primary" onclick="document.getElementById('loaner-csv-input').click()">⬆ Import CSV</button>
       <input type="file" id="loaner-csv-input" accept=".csv" style="display:none" onchange="importLoanerCSV(event)" />
     </div>
@@ -936,6 +937,7 @@
         <option>Bureau Valley Elementary-Wyanet</option>
         <option>Bureau Valley North</option>
       </select>
+      <button class="btn btn-secondary" onclick="exportAllInventoryCSV()">⬇ Export CSV</button>
       <button class="btn btn-primary" onclick="document.getElementById('all-inv-csv-input').click()">⬆ Import CSV</button>
       <input type="file" id="all-inv-csv-input" accept=".csv" style="display:none" onchange="importAllInventoryCSV(event)" />
     </div>
@@ -1647,6 +1649,32 @@ function exportCSV() {
   a.download = 'loaner-records-' + new Date().toISOString().slice(0,10) + '.csv';
   a.click();
   showToast('CSV exported!', 'success');
+}
+
+function exportLoanersCSV() {
+  const headers = ['Asset Tag', 'Serial Number', 'Model', 'Building', 'Status'];
+  const rows = inventory.map(d => [
+    d.assetTag || '', d.serial || '', d.model || '', d.building || '', d.status || ''
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'loaner-devices-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  showToast('Loaner devices exported!', 'success');
+}
+
+function exportAllInventoryCSV() {
+  const headers = ['Asset Tag', 'Serial Number', 'Model', 'Building', 'Assigned To', 'Status'];
+  const rows = allInventory.map(d => [
+    d.assetTag || '', d.serial || '', d.model || '', d.building || '', d.owner || '', d.status || ''
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'full-inventory-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  showToast('Full inventory exported!', 'success');
 }
 
 async function sendToSheet(record) {

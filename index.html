@@ -752,7 +752,8 @@
         <div class="form-grid">
           <div class="form-group full">
             <label for="co-student-name">Student Name</label>
-            <input type="text" id="co-student-name" placeholder="First Last" />
+            <input type="text" id="co-student-name" placeholder="First Last" list="student-names-list" autocomplete="off" />
+            <datalist id="student-names-list"></datalist>
           </div>
           <select id="co-grade" style="display:none"></select>
           <div class="form-group">
@@ -1201,6 +1202,9 @@ async function loadFromSheet() {
     hideLoadingOverlay();
     showToast('Synced from Google Sheets ✓', 'success');
 
+    // Load student names for autocomplete (non-blocking)
+    loadStudentNames();
+
   } catch(err) {
     console.warn('Sheet load failed, falling back to localStorage:', err);
     loadFromLocalStorage();
@@ -1217,6 +1221,23 @@ function loadFromLocalStorage() {
   nextId         = parseInt(localStorage.getItem('nextId')           || '2020');
   nextPartId     = parseInt(localStorage.getItem('nextPartId')       || '100');
   refreshAll();
+}
+
+async function loadStudentNames() {
+  try {
+    const res  = await fetch(`${SHEET_URL}?action=getStudents`);
+    const json = await res.json();
+    if (json.status !== 'ok' || !json.students) return;
+    const dl = document.getElementById('student-names-list');
+    dl.innerHTML = '';
+    json.students.forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      dl.appendChild(opt);
+    });
+  } catch(err) {
+    console.warn('Could not load student names:', err);
+  }
 }
 
 function save() {

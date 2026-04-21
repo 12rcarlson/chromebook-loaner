@@ -1305,7 +1305,7 @@ function renderDashboard() {
       <td>${c.studentName}</td>
       <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${c.assetTag}</code></td>
       <td>${badgeHtml(c.type)}</td>
-      <td style="font-size:13px;color:var(--text-muted)">${formatDueDate(c.due) || '—'}</td>
+      <td style="font-size:13px;color:var(--text-muted)">${c.due || '—'}</td>
     </tr>`).join('');
 }
 
@@ -1320,7 +1320,7 @@ function renderIncidentSummary() {
     <tr>
       <td style="font-size:13px">${c.studentName}</td>
       <td>${badgeHtml(c.type)}</td>
-      <td style="font-size:12px;color:var(--text-muted)">${formatDate(c.date)}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${c.date}</td>
     </tr>`).join('');
 }
 
@@ -1351,8 +1351,8 @@ function renderIncidents() {
       <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 5px;border-radius:4px;">${c.assetTag}</code></td>
       <td style="font-size:12px;color:var(--text-muted)">${c.serial||'—'}</td>
       <td>${badgeHtml(c.type)}</td>
-      <td style="font-size:12px">${formatDate(c.date)}</td>
-      <td style="font-size:12px">${formatDueDate(c.due)||'—'}</td>
+      <td style="font-size:12px">${c.date}</td>
+      <td style="font-size:12px">${c.due||'—'}</td>
       <td>${statusBadge(c.status)}</td>
       <td>
         <div class="actions">
@@ -1510,7 +1510,7 @@ function submitCheckout() {
     return;
   }
 
-  const today = new Date().toString();
+  const today = new Date().toLocaleDateString('en-US');
   const record = { id: nextId++, studentName: name, grade, building, assetTag: asset, serial, type, damagedPart: damaged, date: today, due, notes, status: 'Active' };
 
   checkouts.push(record);
@@ -1530,7 +1530,7 @@ function returnDevice(id) {
   const rec = checkouts.find(c => c.id === id);
   if (!rec) return;
   rec.status = 'Returned';
-  rec.returnDate = new Date().toString();
+  rec.returnDate = new Date().toLocaleDateString('en-US');
   const dev = inventory.find(d => d.assetTag === rec.assetTag);
   if (dev) dev.status = 'Available';
   save();
@@ -1757,7 +1757,7 @@ function importIncidentsCSV(event) {
 
       const existingIds = new Set(checkouts.map(c => String(c.id)));
       let added = 0, dupes = 0, skipped = 0;
-      const today = new Date().toString();
+      const today = new Date().toLocaleDateString('en-US');
 
       for (let i = 1; i < lines.length; i++) {
         const cols       = parseRow(lines[i]);
@@ -2175,38 +2175,6 @@ function startCellEdit(td, store, field, assetTag, inputType, options) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-
-function formatDate(val) {
-  // For checkout timestamps — show date + actual time in CST
-  if (!val || val === '—') return val || '—';
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return val;
-  const hasTime = typeof val === 'string' && /\d{1,2}:\d{2}:\d{2}/.test(val);
-  const datePart = d.toLocaleDateString('en-US', {
-    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
-    timeZone: 'America/Chicago'
-  });
-  if (!hasTime) return datePart;
-  const timePart = d.toLocaleTimeString('en-US', {
-    hour: 'numeric', minute: '2-digit', hour12: true,
-    timeZone: 'America/Chicago'
-  });
-  return `${datePart} ${timePart} CST`;
-}
-
-function formatDueDate(val) {
-  // For due dates from date picker (YYYY-MM-DD) — date only, no time
-  if (!val || val === '—') return val || '—';
-  // Parse YYYY-MM-DD as local to avoid UTC midnight shift producing wrong day
-  const parts = String(val).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (parts) {
-    const d = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
-    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-  }
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return val;
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/Chicago' });
-}
 
 function showToast(msg, type='') {
   const t = document.getElementById('toast');

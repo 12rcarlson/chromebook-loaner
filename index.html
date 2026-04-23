@@ -254,6 +254,16 @@
       border-bottom: 1px solid var(--border);
     }
 
+    /* Sortable column headers */
+    thead th.sortable {
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    thead th.sortable:hover { color: var(--primary); background: var(--primary-light); }
+    thead th.sort-asc::after  { content: ' ▲'; font-size: 10px; color: var(--primary); }
+    thead th.sort-desc::after { content: ' ▼'; font-size: 10px; color: var(--primary); }
+
     tbody tr {
       border-bottom: 1px solid var(--border);
       transition: background 0.1s;
@@ -308,6 +318,7 @@
       display: flex;
       gap: 10px;
       margin-bottom: 1.25rem;
+      flex-wrap: wrap;
     }
 
     .search-bar input { flex: 1; }
@@ -362,27 +373,118 @@
 
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
 
-    .incident-type-tabs {
+    /* ── Recent Students quick-pick ─────────────────────────────────────── */
+    #recent-students-bar {
       display: flex;
-      gap: 8px;
-      margin-bottom: 1.25rem;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 10px;
     }
-
-    .type-tab {
-      padding: 8px 16px;
-      border-radius: 6px;
+    #recent-students-bar .recent-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+      align-self: center;
+      white-space: nowrap;
+    }
+    .recent-student-btn {
+      padding: 4px 10px;
+      border-radius: 20px;
       border: 1px solid var(--border);
       background: var(--bg);
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 500;
       cursor: pointer;
-      transition: all 0.15s;
-      color: var(--text-muted);
+      color: var(--text);
+      transition: all 0.12s;
+    }
+    .recent-student-btn:hover {
+      background: var(--primary-light);
+      border-color: var(--primary);
+      color: var(--primary);
     }
 
-    .type-tab.active-forgot { background: var(--warning-light); border-color: #f9c75e; color: var(--warning); }
-    .type-tab.active-repair { background: var(--danger-light); border-color: #f09595; color: var(--danger); }
-    .type-tab.active-lost   { background: #fbeaf0; border-color: #ed93b1; color: #993556; }
+    /* ── Days out badge ─────────────────────────────────────────────────── */
+    .days-out-badge {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: var(--neutral-light);
+      color: var(--neutral);
+    }
+    .days-out-badge.warn  { background: var(--warning-light); color: var(--warning); }
+    .days-out-badge.alert { background: var(--danger-light);  color: var(--danger);  }
+
+    /* ── Building filter bar on dashboard ───────────────────────────────── */
+    .building-filter-bar {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 1.25rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .building-filter-bar .bfb-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .bfb-btn {
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: all 0.12s;
+    }
+    .bfb-btn:hover  { border-color: var(--primary); color: var(--primary); }
+    .bfb-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+    /* ── Parts usage in repair form ─────────────────────────────────────── */
+    #repair-parts-section {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      margin-top: 8px;
+    }
+    #repair-parts-section .rp-label {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: var(--text);
+    }
+    #repair-parts-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+    #repair-parts-row select { flex: 1; min-width: 180px; }
+    #repair-parts-row input[type="number"] { width: 70px; }
+    #repair-parts-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .rp-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+    .rp-item .rp-remove {
+      background: none;
+      border: none;
+      color: var(--danger);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 0 4px;
+    }
 
     td.editable {
       cursor: pointer;
@@ -702,10 +804,20 @@
       </div>
     </div>
 
+    <!-- NEW: Per-building filter bar -->
+    <div class="building-filter-bar">
+      <span class="bfb-label">Filter by building:</span>
+      <button class="bfb-btn active" data-building="" onclick="setDashboardBuilding(this)">All Buildings</button>
+      <button class="bfb-btn" data-building="Bureau Valley High School" onclick="setDashboardBuilding(this)">BVHS</button>
+      <button class="bfb-btn" data-building="Bureau Valley Elementary and Junior High" onclick="setDashboardBuilding(this)">BVJHE</button>
+      <button class="bfb-btn" data-building="Bureau Valley Elementary-Wyanet" onclick="setDashboardBuilding(this)">BVW</button>
+      <button class="bfb-btn" data-building="Bureau Valley North" onclick="setDashboardBuilding(this)">BVN</button>
+    </div>
+
     <div class="two-col">
       <div class="card">
         <div class="card-header">
-          <h2>Active Checkouts Today</h2>
+          <h2>Active Checkouts <span id="dashboard-building-label" style="font-weight:400;font-size:13px;color:var(--text-muted);"></span></h2>
           <button class="btn btn-primary btn-sm" onclick="showPage('checkout')">+ Check Out</button>
         </div>
         <div id="dashboard-table-wrap">
@@ -716,6 +828,7 @@
                 <th>Asset Tag</th>
                 <th>Type</th>
                 <th>Due</th>
+                <th>Days Out</th>
               </tr>
             </thead>
             <tbody id="dashboard-tbody"></tbody>
@@ -752,6 +865,8 @@
         <div class="form-grid">
           <div class="form-group full">
             <label for="co-student-name">Student Name</label>
+            <!-- NEW: Recent students quick-pick -->
+            <div id="recent-students-bar"></div>
             <input type="text" id="co-student-name" placeholder="First Last" list="student-names-list" autocomplete="off" />
             <datalist id="student-names-list"></datalist>
           </div>
@@ -768,10 +883,11 @@
           </div>
           <div class="form-group">
             <label for="co-asset">Asset Tag</label>
-            <input type="text" id="co-asset" placeholder="e.g. 2888" />
+            <!-- NEW: auto-fill serial on blur -->
+            <input type="text" id="co-asset" placeholder="e.g. 2888" oninput="autoFillSerial()" />
           </div>
           <div class="form-group">
-            <label for="co-serial">Serial Number</label>
+            <label for="co-serial">Serial Number <span id="serial-autofill-badge" style="display:none;font-size:11px;font-weight:400;color:var(--accent);margin-left:4px;">✓ auto-filled</span></label>
             <input type="text" id="co-serial" placeholder="e.g. 5CD122DN6N" />
           </div>
           <div class="form-group">
@@ -811,6 +927,21 @@
                 <label for="co-damaged-other">Describe</label>
                 <input type="text" id="co-damaged-other" placeholder="Describe the issue..." />
               </div>
+            </div>
+            <!-- NEW: Parts usage in repair -->
+            <div id="repair-parts-section">
+              <div class="rp-label">Parts Used (optional — decrements your Parts Inventory)</div>
+              <div id="repair-parts-row">
+                <select id="rp-part-select">
+                  <option value="">Select part to log...</option>
+                </select>
+                <div class="form-group" style="margin:0; gap:4px;">
+                  <label style="font-size:11px;">Qty</label>
+                  <input type="number" id="rp-qty" value="1" min="1" max="99" />
+                </div>
+                <button class="btn btn-secondary btn-sm" type="button" onclick="addRepairPart()">+ Add</button>
+              </div>
+              <div id="repair-parts-list"></div>
             </div>
           </div>
           <div class="form-group full">
@@ -854,6 +985,13 @@
         <option value="Needs Repair">Needs Repair</option>
         <option value="Loaned Out">Loaned Out</option>
       </select>
+      <select id="incident-building-filter" onchange="renderIncidents()" style="width:180px;">
+        <option value="">All Buildings</option>
+        <option>Bureau Valley High School</option>
+        <option>Bureau Valley Elementary and Junior High</option>
+        <option>Bureau Valley Elementary-Wyanet</option>
+        <option>Bureau Valley North</option>
+      </select>
       <button class="btn btn-secondary" onclick="exportCSV()">⬇ Export CSV</button>
       <button class="btn btn-primary" onclick="document.getElementById('incident-csv-input').click()">⬆ Import CSV</button>
       <input type="file" id="incident-csv-input" accept=".csv" style="display:none" onchange="importIncidentsCSV(event)" />
@@ -865,14 +1003,15 @@
       <table>
         <thead>
           <tr>
-            <th>#</th>
-            <th>Student</th>
-            <th>Asset Tag</th>
+            <th class="sortable" data-col="id" onclick="sortIncidents('id')">#</th>
+            <th class="sortable" data-col="studentName" onclick="sortIncidents('studentName')">Student</th>
+            <th class="sortable" data-col="assetTag" onclick="sortIncidents('assetTag')">Asset Tag</th>
             <th>Serial</th>
-            <th>Type</th>
-            <th>Checkout</th>
-            <th>Due Back</th>
-            <th>Status</th>
+            <th class="sortable" data-col="type" onclick="sortIncidents('type')">Type</th>
+            <th class="sortable" data-col="date" onclick="sortIncidents('date')">Checkout</th>
+            <th class="sortable" data-col="due" onclick="sortIncidents('due')">Due Back</th>
+            <th class="sortable" data-col="daysOut" onclick="sortIncidents('daysOut')">Days Out</th>
+            <th class="sortable" data-col="status" onclick="sortIncidents('status')">Status</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -992,11 +1131,11 @@
       </table>
     </div>
   </div>
+
   <!-- PARTS INVENTORY -->
   <div id="page-parts" class="page">
     <h1 class="section-heading">Parts Inventory</h1>
 
-    <!-- Summary bar -->
     <div class="stats-bar" style="grid-template-columns: repeat(3,1fr); margin-bottom:1.5rem;">
       <div class="stat-card blue">
         <div class="label">Total Parts Value</div>
@@ -1012,7 +1151,6 @@
       </div>
     </div>
 
-    <!-- Search + filters -->
     <div class="search-bar" style="flex-wrap:wrap; gap:8px; margin-bottom:1rem;">
       <input type="text" id="parts-search" placeholder="Search part name, model, vendor..." oninput="renderParts()" style="flex:1; min-width:180px;" />
       <select id="parts-type-filter" onchange="renderParts()" style="width:150px;">
@@ -1040,7 +1178,6 @@
       <span id="parts-import-text"></span>
     </div>
 
-    <!-- Model cross-reference hint -->
     <div style="background:var(--primary-light); border:1px solid #b3d0f0; border-radius:8px; padding:10px 16px; margin-bottom:1rem; font-size:13px; color:var(--primary-dark); display:flex; align-items:center; gap:8px;">
       <span>💡</span>
       <span><strong>Model Cross-Reference:</strong> The "Compatible Models" field links parts to devices in your Loaner &amp; Full Inventory. Type model keywords (e.g. "HP 14 G5") to match across both lists.</span>
@@ -1071,7 +1208,6 @@
       </div>
     </div>
 
-    <!-- Add / Edit Part Form -->
     <div id="add-part-form" style="display:none; margin-top:1.5rem;">
       <div class="card">
         <div class="card-header">
@@ -1137,7 +1273,7 @@
 <script>
 const SHEET_URL = 'https://script.google.com/macros/s/AKfycbzvBrK3_CNCZ81yXveTcKOtXrV1cpQuXsyts5gqXmev83Vi5dWYph7-Gwax3zk7Cn4X/exec';
 
-// ── Data stores — populated from Sheet on startup, localStorage is cache only ──
+// ── Data stores ───────────────────────────────────────────────────────────────
 let checkouts      = [];
 let inventory      = [];
 let allInventory   = [];
@@ -1145,7 +1281,17 @@ let partsInventory = [];
 let nextId         = parseInt(localStorage.getItem('nextId')     || '2020');
 let nextPartId     = parseInt(localStorage.getItem('nextPartId') || '100');
 
-// ── Sheet-first startup loader ────────────────────────────────────────────────
+// ── Incident sort state ───────────────────────────────────────────────────────
+let incidentSortCol = 'date';
+let incidentSortDir = 'desc'; // 'asc' | 'desc'
+
+// ── Dashboard building filter ─────────────────────────────────────────────────
+let dashboardBuilding = '';
+
+// ── Repair parts staged for current checkout ─────────────────────────────────
+let stagedRepairParts = []; // [{partId, partName, qty}]
+
+// ─── Startup loader ───────────────────────────────────────────────────────────
 
 function showLoadingOverlay(msg) {
   const el = document.getElementById('loading-overlay');
@@ -1166,45 +1312,30 @@ async function loadFromSheet() {
   try {
     const res  = await fetch(SHEET_URL + '?action=getAll');
     const json = await res.json();
-
     if (json.status !== 'ok') throw new Error(json.message || 'Sheet returned error');
 
-    // ── Checkouts ──
-    checkouts = (json.checkouts || []).map(c => ({
-      ...c,
-      id: Number(c.id) || 0,
-    }));
-
-    // ── Loaner inventory ──
+    checkouts = (json.checkouts || []).map(c => ({ ...c, id: Number(c.id) || 0 }));
     inventory = json.inventory || [];
-
-    // ── Full inventory ──
     allInventory = json.allInventory || [];
 
-    // ── Parts — ensure every part has a valid internal id ──
     let maxPartNum = nextPartId;
-    partsInventory = (json.parts || []).map((p, i) => {
+    partsInventory = (json.parts || []).map((p) => {
       let id = p.id;
       if (!id || id === '') id = 'p' + (maxPartNum++);
       return { ...p, id };
     });
     if (maxPartNum > nextPartId) nextPartId = maxPartNum;
 
-    // Derive nextId from highest existing checkout id
     if (checkouts.length) {
       const maxId = Math.max(...checkouts.map(c => Number(c.id) || 0));
       if (maxId >= nextId) nextId = maxId + 1;
     }
 
-    // Cache to localStorage as offline fallback
     save();
     refreshAll();
     hideLoadingOverlay();
     showToast('Synced from Google Sheets ✓', 'success');
-
-    // Load student names for autocomplete (non-blocking)
     loadStudentNames();
-
   } catch(err) {
     console.warn('Sheet load failed, falling back to localStorage:', err);
     loadFromLocalStorage();
@@ -1242,21 +1373,20 @@ async function loadStudentNames() {
 
 function save() {
   try {
-    localStorage.setItem('checkouts',    JSON.stringify(checkouts));
-    localStorage.setItem('inventory',    JSON.stringify(inventory));
-    localStorage.setItem('allInventory', JSON.stringify(allInventory));
+    localStorage.setItem('checkouts',      JSON.stringify(checkouts));
+    localStorage.setItem('inventory',      JSON.stringify(inventory));
+    localStorage.setItem('allInventory',   JSON.stringify(allInventory));
     localStorage.setItem('partsInventory', JSON.stringify(partsInventory));
-    localStorage.setItem('nextId',       nextId);
-    localStorage.setItem('nextPartId',   nextPartId);
+    localStorage.setItem('nextId',         nextId);
+    localStorage.setItem('nextPartId',     nextPartId);
   } catch(e) {
     if (e.name === 'QuotaExceededError' || e.code === 22) {
-      showToast('Storage limit reached — inventory will not persist between sessions. Use Export CSV to save records.', 'error');
-      console.warn('localStorage quota exceeded:', e);
-    } else {
-      console.error('Save error:', e);
+      showToast('Storage limit reached — use Export CSV to save records.', 'error');
     }
   }
 }
+
+// ─── Navigation ───────────────────────────────────────────────────────────────
 
 function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -1276,7 +1406,11 @@ function refreshAll() {
   renderAvailable();
   renderIncidentSummary();
   renderParts();
+  renderRecentStudents();
+  populateRepairPartsSelect();
 }
+
+// ─── Badge helpers ────────────────────────────────────────────────────────────
 
 function badgeHtml(type) {
   const map = {
@@ -1289,10 +1423,34 @@ function badgeHtml(type) {
 }
 
 function statusBadge(s) {
-  if (s === 'Active')    return `<span class="badge badge-active">Active</span>`;
-  if (s === 'Returned')  return `<span class="badge badge-returned">Returned</span>`;
+  if (s === 'Active')   return `<span class="badge badge-active">Active</span>`;
+  if (s === 'Returned') return `<span class="badge badge-returned">Returned</span>`;
   return `<span class="badge badge-returned">${s}</span>`;
 }
+
+// ─── Days-out helper ──────────────────────────────────────────────────────────
+
+function calcDaysOut(checkout) {
+  if (!checkout.date) return null;
+  const start = new Date(checkout.date);
+  if (isNaN(start.getTime())) return null;
+  const end = checkout.status === 'Returned' && checkout.returnDate
+    ? new Date(checkout.returnDate)
+    : new Date();
+  return Math.max(0, Math.floor((end - start) / 86400000));
+}
+
+function daysOutBadge(checkout) {
+  const d = calcDaysOut(checkout);
+  if (d === null) return '—';
+  if (checkout.status === 'Returned') {
+    return `<span class="days-out-badge">${d}d</span>`;
+  }
+  const cls = d >= 5 ? 'alert' : d >= 3 ? 'warn' : '';
+  return `<span class="days-out-badge ${cls}">${d}d</span>`;
+}
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
 
 function renderStats() {
   const active = checkouts.filter(c => c.status === 'Active').length;
@@ -1305,24 +1463,41 @@ function renderStats() {
   document.getElementById('stat-available').textContent = avail;
 }
 
+// ─── Dashboard building filter ────────────────────────────────────────────────
+
+function setDashboardBuilding(btn) {
+  dashboardBuilding = btn.dataset.building;
+  document.querySelectorAll('.bfb-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const label = document.getElementById('dashboard-building-label');
+  if (label) label.textContent = dashboardBuilding ? `— ${dashboardBuilding}` : '';
+  renderDashboard();
+}
+
 function renderDashboard() {
   const tbody = document.getElementById('dashboard-tbody');
-  const active = checkouts.filter(c => c.status === 'Active').slice(-10).reverse();
+  if (!tbody) return;
+  let active = checkouts.filter(c => c.status === 'Active');
+  if (dashboardBuilding) active = active.filter(c => c.building === dashboardBuilding);
+  active = active.slice(-10).reverse();
+
   if (!active.length) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">No active checkouts</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">No active checkouts${dashboardBuilding ? ' for this building' : ''}</td></tr>`;
     return;
   }
   tbody.innerHTML = active.map(c => `
     <tr>
-      <td>${c.studentName}</td>
+      <td>${c.studentName}<br><span style="font-size:11px;color:var(--text-muted)">${c.building||''}</span></td>
       <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${c.assetTag}</code></td>
       <td>${badgeHtml(c.type)}</td>
-      <td style="font-size:13px;color:var(--text-muted)">${c.due || '—'}</td>
+      <td style="font-size:13px;color:var(--text-muted)">${formatDueDate(c.due) || '—'}</td>
+      <td>${daysOutBadge(c)}</td>
     </tr>`).join('');
 }
 
 function renderIncidentSummary() {
   const tbody = document.getElementById('incident-summary-tbody');
+  if (!tbody) return;
   const recent = [...checkouts].reverse().slice(0, 8);
   if (!recent.length) {
     tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted)">No incidents</td></tr>`;
@@ -1332,22 +1507,70 @@ function renderIncidentSummary() {
     <tr>
       <td style="font-size:13px">${c.studentName}</td>
       <td>${badgeHtml(c.type)}</td>
-      <td style="font-size:12px;color:var(--text-muted)">${c.date}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${formatDate(c.date)}</td>
     </tr>`).join('');
 }
 
+// ─── Incident sorting ─────────────────────────────────────────────────────────
+
+function sortIncidents(col) {
+  if (incidentSortCol === col) {
+    incidentSortDir = incidentSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    incidentSortCol = col;
+    incidentSortDir = col === 'date' || col === 'daysOut' ? 'desc' : 'asc';
+  }
+  // Update header styles
+  document.querySelectorAll('#page-incidents thead th.sortable').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (th.dataset.col === col) th.classList.add(incidentSortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+  });
+  renderIncidents();
+}
+
 function renderIncidents() {
-  const search  = (document.getElementById('incident-search')?.value || '').toLowerCase();
-  const filter  = document.getElementById('incident-filter')?.value || '';
-  const statusF = document.getElementById('incident-status-filter')?.value || '';
-  const tbody   = document.getElementById('incident-tbody');
+  const search    = (document.getElementById('incident-search')?.value || '').toLowerCase();
+  const filter    = document.getElementById('incident-filter')?.value || '';
+  const statusF   = document.getElementById('incident-status-filter')?.value || '';
+  const buildingF = document.getElementById('incident-building-filter')?.value || '';
+  const tbody     = document.getElementById('incident-tbody');
   if (!tbody) return;
 
-  let rows = [...checkouts].reverse().filter(c => {
-    const matchText   = !search || [c.studentName, c.assetTag, c.serial, c.studentId].some(v => v && v.toLowerCase().includes(search));
-    const matchType   = !filter || c.type === filter;
-    const matchStatus = !statusF || c.status === statusF || (statusF === 'Active' && c.status === 'Active') || (statusF === 'Returned' && c.status === 'Returned');
-    return matchText && matchType && matchStatus;
+  let rows = [...checkouts].filter(c => {
+    const matchText     = !search || [c.studentName, c.assetTag, c.serial, c.studentId].some(v => v && v.toLowerCase().includes(search));
+    const matchType     = !filter || c.type === filter;
+    const matchStatus   = !statusF || c.status === statusF;
+    const matchBuilding = !buildingF || c.building === buildingF;
+    return matchText && matchType && matchStatus && matchBuilding;
+  });
+
+  // Sort
+  rows.sort((a, b) => {
+    let av, bv;
+    if (incidentSortCol === 'daysOut') {
+      av = calcDaysOut(a) ?? -1;
+      bv = calcDaysOut(b) ?? -1;
+    } else if (incidentSortCol === 'date' || incidentSortCol === 'due') {
+      av = a[incidentSortCol] ? new Date(a[incidentSortCol]).getTime() : 0;
+      bv = b[incidentSortCol] ? new Date(b[incidentSortCol]).getTime() : 0;
+    } else if (incidentSortCol === 'id') {
+      av = Number(a.id) || 0;
+      bv = Number(b.id) || 0;
+    } else {
+      av = String(a[incidentSortCol] || '').toLowerCase();
+      bv = String(b[incidentSortCol] || '').toLowerCase();
+    }
+    if (av < bv) return incidentSortDir === 'asc' ? -1 : 1;
+    if (av > bv) return incidentSortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  // Set initial sort indicator on first render
+  document.querySelectorAll('#page-incidents thead th.sortable').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (th.dataset.col === incidentSortCol) {
+      th.classList.add(incidentSortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+    }
   });
 
   if (!rows.length) {
@@ -1362,8 +1585,9 @@ function renderIncidents() {
       <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 5px;border-radius:4px;">${c.assetTag}</code></td>
       <td style="font-size:12px;color:var(--text-muted)">${c.serial||'—'}</td>
       <td>${badgeHtml(c.type)}</td>
-      <td style="font-size:12px">${c.date}</td>
-      <td style="font-size:12px">${c.due||'—'}</td>
+      <td style="font-size:12px">${formatDate(c.date)}</td>
+      <td style="font-size:12px">${formatDueDate(c.due)||'—'}</td>
+      <td>${daysOutBadge(c)}</td>
       <td>${statusBadge(c.status)}</td>
       <td>
         <div class="actions">
@@ -1373,6 +1597,8 @@ function renderIncidents() {
       </td>
     </tr>`).join('');
 }
+
+// ─── Loaners ──────────────────────────────────────────────────────────────────
 
 function loanerStatusBadge(s) {
   const cls = s === 'Available' ? 'badge-active' : s === 'On Loan' ? 'badge-returned' : 'badge-repair';
@@ -1392,9 +1618,6 @@ function renderLoaners() {
 
   const countEl = document.getElementById('inv-count');
   if (countEl) countEl.textContent = `${rows.length.toLocaleString()} of ${inventory.length.toLocaleString()} devices`;
-
-  const LOANER_STATUSES = ['Available','On Loan','Loaner','Daily Loaner','Needs Repair'];
-  const BUILDINGS = ['Bureau Valley High School','Bureau Valley Elementary and Junior High','Bureau Valley Elementary-Wyanet','Bureau Valley North'];
 
   tbody.innerHTML = rows.slice(0, 200).map(d => `
     <tr>
@@ -1446,9 +1669,6 @@ function renderAllInventory() {
     return;
   }
 
-  const ALL_STATUSES = ['Assigned','Unassigned','Loaner','Daily Loaner','Needs Repair','Forgot Device'];
-  const BUILDINGS    = ['Bureau Valley High School','Bureau Valley Elementary and Junior High','Bureau Valley Elementary-Wyanet','Bureau Valley North'];
-
   tbody.innerHTML = rows.slice(0, 200).map(d => {
     const statusCls = d.status==='Assigned' ? 'badge-returned' : d.status==='Unassigned' ? 'badge-active' : d.status==='Loaner'||d.status==='Daily Loaner' ? 'badge-active' : 'badge-repair';
     return `
@@ -1483,7 +1703,6 @@ function renderAllInventory() {
 function renderAvailable() {
   const tbody = document.getElementById('available-tbody');
   if (!tbody) return;
-  // Only show loaner pool devices that are Available or Loaner status — not On Loan, Needs Repair, etc.
   const avail = inventory.filter(d => d.status === 'Available' || d.status === 'Loaner' || d.status === 'Daily Loaner');
   if (!avail.length) {
     tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">No loaner devices available</td></tr>`;
@@ -1494,14 +1713,152 @@ function renderAvailable() {
       <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${d.assetTag}</code></td>
       <td style="font-size:13px">${d.model || '—'}</td>
       <td><span class="badge badge-active">${d.status}</span></td>
-      <td><button class="btn btn-secondary btn-sm" onclick="prefillDevice('${d.assetTag}','${d.serial}')">Select</button></td>
+      <td><button class="btn btn-secondary btn-sm" onclick="prefillDevice('${d.assetTag}','${(d.serial||'').replace(/'/g,"\\'")}')">Select</button></td>
     </tr>`).join('');
 }
 
 function prefillDevice(tag, serial) {
   document.getElementById('co-asset').value  = tag;
   document.getElementById('co-serial').value = serial;
+  document.getElementById('serial-autofill-badge').style.display = serial ? 'inline' : 'none';
 }
+
+// ─── NEW: Auto-fill serial from asset tag ─────────────────────────────────────
+
+function autoFillSerial() {
+  const tag = document.getElementById('co-asset').value.trim();
+  const badge = document.getElementById('serial-autofill-badge');
+  if (!tag) { badge.style.display = 'none'; return; }
+
+  // Search loaner pool first, then full inventory
+  const match = inventory.find(d => d.assetTag === tag) || allInventory.find(d => d.assetTag === tag);
+  if (match && match.serial) {
+    const serialField = document.getElementById('co-serial');
+    // Only auto-fill if field is currently empty or was previously auto-filled
+    if (!serialField.value || serialField.dataset.autoFilled === '1') {
+      serialField.value = match.serial;
+      serialField.dataset.autoFilled = '1';
+      badge.style.display = 'inline';
+    }
+  } else {
+    badge.style.display = 'none';
+    const serialField = document.getElementById('co-serial');
+    if (serialField.dataset.autoFilled === '1') {
+      serialField.value = '';
+      serialField.dataset.autoFilled = '0';
+    }
+  }
+}
+
+// ─── NEW: Recent students quick-pick ─────────────────────────────────────────
+
+const RECENT_STUDENTS_KEY = 'recentStudents';
+const MAX_RECENT = 10;
+
+function getRecentStudents() {
+  try { return JSON.parse(localStorage.getItem(RECENT_STUDENTS_KEY) || '[]'); }
+  catch(e) { return []; }
+}
+
+function pushRecentStudent(name) {
+  if (!name) return;
+  let recent = getRecentStudents().filter(n => n !== name);
+  recent.unshift(name);
+  recent = recent.slice(0, MAX_RECENT);
+  localStorage.setItem(RECENT_STUDENTS_KEY, JSON.stringify(recent));
+}
+
+function renderRecentStudents() {
+  const bar = document.getElementById('recent-students-bar');
+  if (!bar) return;
+  const recent = getRecentStudents();
+  if (!recent.length) { bar.innerHTML = ''; return; }
+  bar.innerHTML = `<span class="recent-label">Recent:</span>` +
+    recent.map(name =>
+      `<button class="recent-student-btn" type="button" onclick="selectRecentStudent('${name.replace(/'/g,"\\'")}')">
+        ${name}
+      </button>`
+    ).join('');
+}
+
+function selectRecentStudent(name) {
+  document.getElementById('co-student-name').value = name;
+}
+
+// ─── NEW: Repair parts staging ────────────────────────────────────────────────
+
+function populateRepairPartsSelect() {
+  const sel = document.getElementById('rp-part-select');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Select part to log...</option>';
+  partsInventory
+    .filter(p => Number(p.stock) > 0)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = `${p.name} (${p.stock} in stock)`;
+      sel.appendChild(opt);
+    });
+  if (current) sel.value = current;
+}
+
+function addRepairPart() {
+  const sel  = document.getElementById('rp-part-select');
+  const qty  = parseInt(document.getElementById('rp-qty').value, 10) || 1;
+  const partId = sel.value;
+  if (!partId) { showToast('Select a part first.', 'error'); return; }
+
+  const part = partsInventory.find(p => p.id === partId);
+  if (!part) return;
+
+  // Check if already staged — bump qty instead
+  const existing = stagedRepairParts.find(x => x.partId === partId);
+  if (existing) {
+    existing.qty += qty;
+  } else {
+    stagedRepairParts.push({ partId, partName: part.name, qty });
+  }
+
+  sel.value = '';
+  document.getElementById('rp-qty').value = 1;
+  renderStagedRepairParts();
+}
+
+function removeRepairPart(partId) {
+  stagedRepairParts = stagedRepairParts.filter(x => x.partId !== partId);
+  renderStagedRepairParts();
+}
+
+function renderStagedRepairParts() {
+  const list = document.getElementById('repair-parts-list');
+  if (!list) return;
+  if (!stagedRepairParts.length) { list.innerHTML = ''; return; }
+  list.innerHTML = stagedRepairParts.map(x => `
+    <div class="rp-item">
+      <span><strong>${x.partName}</strong> &times; ${x.qty}</span>
+      <button class="rp-remove" onclick="removeRepairPart('${x.partId}')" title="Remove">✕</button>
+    </div>`).join('');
+}
+
+function commitRepairParts() {
+  // Called at checkout save — decrements stock and syncs each affected part
+  if (!stagedRepairParts.length) return;
+  stagedRepairParts.forEach(({ partId, qty }) => {
+    const part = partsInventory.find(p => p.id === partId);
+    if (!part) return;
+    part.stock = Math.max(0, (Number(part.stock) || 0) - qty);
+    upsertPartToSheet(part);
+  });
+  save();
+  renderParts();
+  stagedRepairParts = [];
+  renderStagedRepairParts();
+  populateRepairPartsSelect();
+}
+
+// ─── Checkout ─────────────────────────────────────────────────────────────────
 
 function submitCheckout() {
   const name        = document.getElementById('co-student-name').value.trim();
@@ -1514,6 +1871,7 @@ function submitCheckout() {
   const notes       = document.getElementById('co-notes').value.trim();
   const damagedPart = document.getElementById('co-damaged-part').value;
   const damagedOther= document.getElementById('co-damaged-other').value.trim();
+  const originalAssetTag = document.getElementById('co-original-asset').value.trim();
   const damaged     = damagedPart === 'Other' ? (damagedOther || 'Other') : damagedPart;
 
   if (!name || !asset || !type) {
@@ -1521,17 +1879,26 @@ function submitCheckout() {
     return;
   }
 
-  const today = new Date().toLocaleDateString('en-US');
-  const record = { id: nextId++, studentName: name, grade, building, assetTag: asset, serial, type, damagedPart: damaged, date: today, due, notes, status: 'Active' };
+  const today = new Date().toString();
+  const record = {
+    id: nextId++, studentName: name, grade, building, assetTag: asset, serial,
+    type, damagedPart: damaged, originalAssetTag, date: today, due, notes, status: 'Active'
+  };
 
   checkouts.push(record);
 
   const dev = inventory.find(d => d.assetTag === asset);
   if (dev) dev.status = 'On Loan';
 
+  // Commit staged repair parts if any
+  if (type === 'Needs Repair') commitRepairParts();
+
+  // Track recent student
+  pushRecentStudent(name);
+
   save();
   sendToSheet(record);
-  if (dev) upsertDeviceToSheet(dev); // only update the one device that changed
+  if (dev) upsertDeviceToSheet(dev);
   clearCheckoutForm();
   refreshAll();
   showToast('Checkout saved!', 'success');
@@ -1541,13 +1908,13 @@ function returnDevice(id) {
   const rec = checkouts.find(c => c.id === id);
   if (!rec) return;
   rec.status = 'Returned';
-  rec.returnDate = new Date().toLocaleDateString('en-US');
+  rec.returnDate = new Date().toString();
   const dev = inventory.find(d => d.assetTag === rec.assetTag);
   if (dev) dev.status = 'Available';
   save();
   refreshAll();
   sendReturnToSheet(rec);
-  if (dev) upsertDeviceToSheet(dev); // only update the one device that changed
+  if (dev) upsertDeviceToSheet(dev);
   showToast('Device marked as returned.', 'success');
 }
 
@@ -1569,10 +1936,8 @@ function addDevice() {
   const newDev = { assetTag: asset, serial, model, building, status: 'Available' };
   inventory.push(newDev);
   save();
-  renderLoaners();
-  renderAvailable();
-  renderStats();
-  upsertDeviceToSheet(newDev); // only push the new row
+  renderLoaners(); renderAvailable(); renderStats();
+  upsertDeviceToSheet(newDev);
   document.getElementById('inv-asset').value  = '';
   document.getElementById('inv-serial').value = '';
   document.getElementById('inv-model').value  = '';
@@ -1582,33 +1947,26 @@ function addDevice() {
 function removeDevice(tag) {
   if (!confirm('Remove device ' + tag + '?')) return;
   inventory = inventory.filter(d => d.assetTag !== tag);
-  save();
-  renderLoaners();
-  renderStats();
-  deleteDeviceFromSheet(tag); // only delete that row
+  save(); renderLoaners(); renderStats();
+  deleteDeviceFromSheet(tag);
   showToast('Device removed.');
 }
 
-function importLoanerCSV(event) { importFromCSV(event, 'loaner'); }
-function importAllInventoryCSV(event) { importFromCSV(event, 'all'); }
+function importLoanerCSV(event)      { importFromCSV(event, 'loaner'); }
+function importAllInventoryCSV(event) { importFromCSV(event, 'all');    }
 
 function importFromCSV(event, target) {
   const file = event.target.files[0];
   if (!file) return;
-
   showBanner(target, 'Reading file...', 'success');
-
   const reader = new FileReader();
-  reader.onerror = function() {
-    showBanner(target, 'Error reading file. Please try again.', 'error');
-  };
+  reader.onerror = function() { showBanner(target, 'Error reading file. Please try again.', 'error'); };
   reader.onload = function(e) {
     try {
-      const lines  = e.target.result.split('\n').filter(l => l.trim());
+      const lines = e.target.result.split('\n').filter(l => l.trim());
       if (lines.length < 2) { showBanner(target, 'File appears empty.', 'error'); return; }
 
       const header = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-
       const idx = {
         assetTag  : header.findIndex(h => h === 'AssetTag'),
         serial    : header.findIndex(h => h === 'SerialNumber'),
@@ -1623,10 +1981,7 @@ function importFromCSV(event, target) {
       if (idx.serial   === -1) idx.serial   = header.findIndex(h => /serial/i.test(h));
       if (idx.model    === -1) idx.model    = header.findIndex(h => /model/i.test(h));
 
-      if (idx.assetTag === -1) {
-        showBanner(target, 'Could not find AssetTag column. Is this a TDT export?', 'error');
-        return;
-      }
+      if (idx.assetTag === -1) { showBanner(target, 'Could not find AssetTag column.', 'error'); return; }
 
       function parseRow(line) {
         const cols = []; let cur = '', inQ = false;
@@ -1636,55 +1991,41 @@ function importFromCSV(event, target) {
           else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
           else { cur += ch; }
         }
-        cols.push(cur.trim());
-        return cols;
+        cols.push(cur.trim()); return cols;
       }
-
-      function col(cols, i) {
-        return (i !== -1 && cols[i] !== undefined) ? cols[i].trim() : '';
-      }
+      function col(cols, i) { return (i !== -1 && cols[i] !== undefined) ? cols[i].trim() : ''; }
 
       let added = 0, skipped = 0, dupes = 0;
       const dataStore = target === 'loaner' ? inventory : allInventory;
       const existing  = new Set(dataStore.map(d => d.assetTag));
 
       for (let i = 1; i < lines.length; i++) {
-        const cols     = parseRow(lines[i]);
-        const status   = col(cols, idx.status);
+        const cols   = parseRow(lines[i]);
+        const status = col(cols, idx.status);
         if (status === 'Decommissioned') { skipped++; continue; }
         const assetTag = col(cols, idx.assetTag);
         if (!assetTag) { skipped++; continue; }
         if (existing.has(assetTag)) { dupes++; continue; }
 
-        const mfrName  = col(cols, idx.mfr);
-        const modelNum = col(cols, idx.model);
-        const firstName= col(cols, idx.ownerFirst);
-        const lastName = col(cols, idx.ownerLast);
-        const owner    = [firstName, lastName].filter(Boolean).join(' ');
+        const mfrName   = col(cols, idx.mfr);
+        const modelNum  = col(cols, idx.model);
+        const firstName = col(cols, idx.ownerFirst);
+        const lastName  = col(cols, idx.ownerLast);
+        const owner     = [firstName, lastName].filter(Boolean).join(' ');
 
         dataStore.push({
-          assetTag,
-          serial  : col(cols, idx.serial),
-          model   : (mfrName ? `${mfrName} ${modelNum}` : modelNum).trim() || 'Unknown',
-          building: col(cols, idx.building),
-          status  : status || 'Unassigned',
-          owner,
+          assetTag, serial: col(cols, idx.serial),
+          model: (mfrName ? `${mfrName} ${modelNum}` : modelNum).trim() || 'Unknown',
+          building: col(cols, idx.building), status: status || 'Unassigned', owner,
         });
-        existing.add(assetTag);
-        added++;
+        existing.add(assetTag); added++;
       }
 
-      save();
-      refreshAll();
-      // Sync to Google Sheet after CSV import
-      if (target === 'loaner') {
-        syncInventoryToSheet();
-      } else {
-        syncAllInventoryToSheet();
-      }
+      save(); refreshAll();
+      if (target === 'loaner') syncInventoryToSheet();
+      else syncAllInventoryToSheet();
       showBanner(target, `✓ Imported ${added.toLocaleString()} devices.${dupes ? ' ' + dupes + ' duplicates skipped.' : ''}${skipped ? ' ' + skipped + ' decommissioned skipped.' : ''} Syncing to Sheet...`, 'success');
     } catch(err) {
-      console.error('Import error:', err);
       showBanner(target, 'Import failed: ' + err.message, 'error');
     }
     event.target.value = '';
@@ -1695,15 +2036,7 @@ function importFromCSV(event, target) {
 function showBanner(target, msg, type) {
   const id  = target === 'loaner' ? 'loaner-import-status' : 'all-inv-import-status';
   const tid = target === 'loaner' ? 'loaner-import-text'   : 'all-inv-import-text';
-  const el  = document.getElementById(id);
-  const txt = document.getElementById(tid);
-  if (!el || !txt) return;
-  el.style.display    = 'block';
-  txt.textContent     = msg;
-  el.style.background = type === 'error' ? 'var(--danger-light)'  : 'var(--accent-light)';
-  el.style.color      = type === 'error' ? 'var(--danger)'        : '#085041';
-  el.style.border     = type === 'error' ? '1px solid #f09595'    : '1px solid #9fe1cb';
-  setTimeout(() => { el.style.display = 'none'; }, 6000);
+  showBannerFor(id, tid, msg, type);
 }
 
 function showBannerFor(statusId, textId, msg, type) {
@@ -1728,10 +2061,7 @@ function importIncidentsCSV(event) {
     try {
       const lines = e.target.result.split('\n').filter(l => l.trim());
       if (lines.length < 2) { showBannerFor('incident-import-status', 'incident-import-text', 'File appears empty.', 'error'); return; }
-
       const header = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-
-      // Accept our own export format OR a custom CSV with flexible column names
       const idx = {
         id          : header.findIndex(h => /^id$/i.test(h)),
         studentName : header.findIndex(h => /student.?name/i.test(h)),
@@ -1747,12 +2077,9 @@ function importIncidentsCSV(event) {
         status      : header.findIndex(h => /^status$/i.test(h)),
         notes       : header.findIndex(h => /notes/i.test(h)),
       };
-
       if (idx.studentName === -1 && idx.assetTag === -1) {
-        showBannerFor('incident-import-status', 'incident-import-text', 'Could not find Student Name or Asset Tag columns.', 'error');
-        return;
+        showBannerFor('incident-import-status', 'incident-import-text', 'Could not find Student Name or Asset Tag columns.', 'error'); return;
       }
-
       function parseRow(line) {
         const cols = []; let cur = '', inQ = false;
         for (let i = 0; i < line.length; i++) {
@@ -1761,52 +2088,33 @@ function importIncidentsCSV(event) {
           else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
           else { cur += ch; }
         }
-        cols.push(cur.trim());
-        return cols;
+        cols.push(cur.trim()); return cols;
       }
       function col(cols, i) { return (i !== -1 && cols[i] !== undefined) ? cols[i].trim() : ''; }
-
       const existingIds = new Set(checkouts.map(c => String(c.id)));
       let added = 0, dupes = 0, skipped = 0;
-      const today = new Date().toLocaleDateString('en-US');
-
+      const today = new Date().toString();
       for (let i = 1; i < lines.length; i++) {
-        const cols       = parseRow(lines[i]);
+        const cols = parseRow(lines[i]);
         const studentName = col(cols, idx.studentName);
         const assetTag    = col(cols, idx.assetTag);
         if (!studentName && !assetTag) { skipped++; continue; }
-
         const csvId = col(cols, idx.id);
         if (csvId && existingIds.has(csvId)) { dupes++; continue; }
-
         const newId = csvId ? parseInt(csvId, 10) : nextId++;
         const record = {
-          id          : newId,
-          studentName : studentName || 'Unknown',
-          grade       : col(cols, idx.grade),
-          building    : col(cols, idx.building),
-          assetTag    : assetTag,
-          serial      : col(cols, idx.serial),
-          type        : col(cols, idx.type) || 'Forgot Device',
-          damagedPart : col(cols, idx.damagedPart),
-          originalAssetTag: col(cols, idx.origAsset),
-          date        : col(cols, idx.date) || today,
-          due         : col(cols, idx.due),
-          status      : col(cols, idx.status) || 'Active',
-          notes       : col(cols, idx.notes),
+          id: newId, studentName: studentName || 'Unknown', grade: col(cols, idx.grade),
+          building: col(cols, idx.building), assetTag, serial: col(cols, idx.serial),
+          type: col(cols, idx.type) || 'Forgot Device', damagedPart: col(cols, idx.damagedPart),
+          originalAssetTag: col(cols, idx.origAsset), date: col(cols, idx.date) || today,
+          due: col(cols, idx.due), status: col(cols, idx.status) || 'Active', notes: col(cols, idx.notes),
         };
-        checkouts.push(record);
-        existingIds.add(String(newId));
-        added++;
+        checkouts.push(record); existingIds.add(String(newId)); added++;
       }
-
-      save();
-      refreshAll();
+      save(); refreshAll();
       showBannerFor('incident-import-status', 'incident-import-text',
-        `✓ Imported ${added} incident${added !== 1 ? 's' : ''}.${dupes ? ' ' + dupes + ' duplicates skipped.' : ''}${skipped ? ' ' + skipped + ' blank rows skipped.' : ''}`,
-        'success');
+        `✓ Imported ${added} incident${added !== 1 ? 's' : ''}.${dupes ? ' ' + dupes + ' duplicates skipped.' : ''}${skipped ? ' ' + skipped + ' blank rows skipped.' : ''}`, 'success');
     } catch(err) {
-      console.error('Incident import error:', err);
       showBannerFor('incident-import-status', 'incident-import-text', 'Import failed: ' + err.message, 'error');
     }
     event.target.value = '';
@@ -1824,26 +2132,18 @@ function importPartsCSV(event) {
     try {
       const lines = e.target.result.split('\n').filter(l => l.trim());
       if (lines.length < 2) { showBannerFor('parts-import-status', 'parts-import-text', 'File appears empty.', 'error'); return; }
-
       const header = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-
-      // Accept our own export format OR the TDT Part Center CSV column names
       const idx = {
-        type   : header.findIndex(h => /part.?type|type/i.test(h)),
-        mfr    : header.findIndex(h => /manufacturer|mfr/i.test(h)),
-        name   : header.findIndex(h => /part.?name|name/i.test(h)),
-        value  : header.findIndex(h => /value|cost|price/i.test(h)),
-        stock  : header.findIndex(h => /^stock|qty|quantity|on.?hand/i.test(h)),
-        fru    : header.findIndex(h => /fru|model.?#|part.?num/i.test(h)),
-        models : header.findIndex(h => /compatible|models/i.test(h)),
-        vendor : header.findIndex(h => /vendor|supplier/i.test(h)),
+        type  : header.findIndex(h => /part.?type|type/i.test(h)),
+        mfr   : header.findIndex(h => /manufacturer|mfr/i.test(h)),
+        name  : header.findIndex(h => /part.?name|name/i.test(h)),
+        value : header.findIndex(h => /value|cost|price/i.test(h)),
+        stock : header.findIndex(h => /^stock|qty|quantity|on.?hand/i.test(h)),
+        fru   : header.findIndex(h => /fru|model.?#|part.?num/i.test(h)),
+        models: header.findIndex(h => /compatible|models/i.test(h)),
+        vendor: header.findIndex(h => /vendor|supplier/i.test(h)),
       };
-
-      if (idx.name === -1) {
-        showBannerFor('parts-import-status', 'parts-import-text', 'Could not find a Part Name column.', 'error');
-        return;
-      }
-
+      if (idx.name === -1) { showBannerFor('parts-import-status', 'parts-import-text', 'Could not find a Part Name column.', 'error'); return; }
       function parseRow(line) {
         const cols = []; let cur = '', inQ = false;
         for (let i = 0; i < line.length; i++) {
@@ -1852,45 +2152,28 @@ function importPartsCSV(event) {
           else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
           else { cur += ch; }
         }
-        cols.push(cur.trim());
-        return cols;
+        cols.push(cur.trim()); return cols;
       }
       function col(cols, i) { return (i !== -1 && cols[i] !== undefined) ? cols[i].trim() : ''; }
-
       const existingNames = new Set(partsInventory.map(p => p.name.toLowerCase()));
       let added = 0, dupes = 0, skipped = 0;
-
       for (let i = 1; i < lines.length; i++) {
         const cols = parseRow(lines[i]);
         const name = col(cols, idx.name);
         if (!name || name === 'TOTAL INVENTORY VALUE') { skipped++; continue; }
         if (existingNames.has(name.toLowerCase())) { dupes++; continue; }
-
         const rawValue = col(cols, idx.value).replace(/[$,]/g, '');
         const part = {
-          id    : 'p' + (nextPartId++),
-          type  : col(cols, idx.type)   || 'Misc',
-          mfr   : col(cols, idx.mfr)    || '',
-          name  : name,
-          value : parseFloat(rawValue)  || 0,
-          stock : parseInt(col(cols, idx.stock), 10) || 0,
-          fru   : col(cols, idx.fru)    || '',
-          models: col(cols, idx.models) || '',
-          vendor: col(cols, idx.vendor) || '',
+          id: 'p' + (nextPartId++), type: col(cols, idx.type) || 'Misc', mfr: col(cols, idx.mfr) || '',
+          name, value: parseFloat(rawValue) || 0, stock: parseInt(col(cols, idx.stock), 10) || 0,
+          fru: col(cols, idx.fru) || '', models: col(cols, idx.models) || '', vendor: col(cols, idx.vendor) || '',
         };
-        partsInventory.push(part);
-        existingNames.add(name.toLowerCase());
-        added++;
+        partsInventory.push(part); existingNames.add(name.toLowerCase()); added++;
       }
-
-      save();
-      renderParts();
-      syncPartsToSheet();
+      save(); renderParts(); syncPartsToSheet();
       showBannerFor('parts-import-status', 'parts-import-text',
-        `✓ Imported ${added} part${added !== 1 ? 's' : ''}.${dupes ? ' ' + dupes + ' duplicate names skipped.' : ''}${skipped ? ' ' + skipped + ' blank rows skipped.' : ''} Syncing to Sheet...`,
-        'success');
+        `✓ Imported ${added} part${added !== 1 ? 's' : ''}.${dupes ? ' ' + dupes + ' duplicate names skipped.' : ''}${skipped ? ' ' + skipped + ' blank rows skipped.' : ''} Syncing to Sheet...`, 'success');
     } catch(err) {
-      console.error('Parts import error:', err);
       showBannerFor('parts-import-status', 'parts-import-text', 'Import failed: ' + err.message, 'error');
     }
     event.target.value = '';
@@ -1900,18 +2183,14 @@ function importPartsCSV(event) {
 
 function clearLoaners() {
   if (!confirm(`Clear all ${inventory.length.toLocaleString()} loaner devices? This cannot be undone.`)) return;
-  inventory = [];
-  save(); refreshAll();
-  syncInventoryToSheet(); // sync empty state to sheet
+  inventory = []; save(); refreshAll(); syncInventoryToSheet();
   showToast('Loaner devices cleared.');
 }
 
 function removeAllInvDevice(tag) {
   if (!confirm('Delete device ' + tag + ' from inventory?')) return;
   allInventory = allInventory.filter(d => d.assetTag !== tag);
-  save();
-  renderAllInventory();
-  deleteAllDeviceFromSheet(tag); // only delete that row
+  save(); renderAllInventory(); deleteAllDeviceFromSheet(tag);
   showToast('Device deleted.');
 }
 
@@ -1920,25 +2199,19 @@ function clearAllInventory() {
   const filter   = document.getElementById('all-inv-status-filter')?.value || '';
   const building = document.getElementById('all-inv-building-filter')?.value || '';
   const isFiltered = search || filter || building;
-
   const toDelete = allInventory.filter(d =>
     (!search   || [d.assetTag, d.model, d.serial, d.building, d.owner].some(v => v && v.toLowerCase().includes(search))) &&
     (!filter   || d.status === filter) &&
     (!building || d.building === building)
   );
-
   if (!toDelete.length) { showToast('Nothing to delete.'); return; }
-
   const msg = isFiltered
     ? `Delete ${toDelete.length.toLocaleString()} filtered devices? This cannot be undone.`
     : `Clear all ${allInventory.length.toLocaleString()} devices? This cannot be undone.`;
-
   if (!confirm(msg)) return;
-
   const deleteSet = new Set(toDelete.map(d => d.assetTag));
   allInventory = allInventory.filter(d => !deleteSet.has(d.assetTag));
-  save(); refreshAll();
-  syncAllInventoryToSheet();
+  save(); refreshAll(); syncAllInventoryToSheet();
   showToast(`${toDelete.length.toLocaleString()} devices deleted.`);
 }
 
@@ -1948,14 +2221,20 @@ function openAddDevice() {
 }
 
 function clearCheckoutForm() {
-  ['co-student-name','co-asset','co-serial','co-notes','co-damaged-other'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('co-grade').value = '';
+  ['co-student-name','co-asset','co-serial','co-notes','co-damaged-other','co-original-asset'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ''; delete el.dataset.autoFilled; }
+  });
+  document.getElementById('co-grade').value    = '';
   document.getElementById('co-building').value = '';
-  document.getElementById('co-type').value = 'Forgot Device';
-  document.getElementById('co-due').value = getTomorrow();
+  document.getElementById('co-type').value     = 'Forgot Device';
+  document.getElementById('co-due').value      = getTomorrow();
   document.getElementById('co-damaged-part').value = '';
   document.getElementById('damaged-part-section').style.display = 'none';
-  document.getElementById('other-text-group').style.display = 'none';
+  document.getElementById('other-text-group').style.display     = 'none';
+  document.getElementById('serial-autofill-badge').style.display = 'none';
+  stagedRepairParts = [];
+  renderStagedRepairParts();
 }
 
 function exportCSV() {
@@ -1965,55 +2244,42 @@ function exportCSV() {
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download = 'loaner-records-' + new Date().toISOString().slice(0,10) + '.csv';
-  a.click();
-  showToast('CSV exported!', 'success');
+  a.click(); showToast('CSV exported!', 'success');
 }
 
 function exportLoanersCSV() {
-  const headers = ['Asset Tag', 'Serial Number', 'Model', 'Building', 'Status'];
-  const rows = inventory.map(d => [
-    d.assetTag || '', d.serial || '', d.model || '', d.building || '', d.status || ''
-  ]);
+  const headers = ['Asset Tag','Serial Number','Model','Building','Status'];
+  const rows = inventory.map(d => [d.assetTag||'', d.serial||'', d.model||'', d.building||'', d.status||'']);
   const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download = 'loaner-devices-' + new Date().toISOString().slice(0,10) + '.csv';
-  a.click();
-  showToast('Loaner devices exported!', 'success');
+  a.click(); showToast('Loaner devices exported!', 'success');
 }
 
 function exportAllInventoryCSV() {
-  const headers = ['Asset Tag', 'Serial Number', 'Model', 'Building', 'Assigned To', 'Status'];
-  const rows = allInventory.map(d => [
-    d.assetTag || '', d.serial || '', d.model || '', d.building || '', d.owner || '', d.status || ''
-  ]);
+  const headers = ['Asset Tag','Serial Number','Model','Building','Assigned To','Status'];
+  const rows = allInventory.map(d => [d.assetTag||'', d.serial||'', d.model||'', d.building||'', d.owner||'', d.status||'']);
   const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download = 'full-inventory-' + new Date().toISOString().slice(0,10) + '.csv';
-  a.click();
-  showToast('Full inventory exported!', 'success');
+  a.click(); showToast('Full inventory exported!', 'success');
 }
+
+// ─── Sheet sync helpers ───────────────────────────────────────────────────────
 
 async function sendToSheet(record) {
   if (SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
   try {
     const params = new URLSearchParams({
-      action      : 'checkout',
-      id          : record.id,
-      studentName : record.studentName || '',
-      grade       : record.grade       || '',
-      building    : record.building    || '',
-      assetTag    : record.assetTag    || '',
-      serial      : record.serial      || '',
-      type            : record.type            || '',
-      damagedPart     : record.damagedPart     || '',
-      originalAssetTag: record.originalAssetTag || '',
-      date        : record.date        || '',
-      due         : record.due         || '',
-      notes       : record.notes       || ''
+      action: 'checkout', id: record.id, studentName: record.studentName||'',
+      grade: record.grade||'', building: record.building||'', assetTag: record.assetTag||'',
+      serial: record.serial||'', type: record.type||'', damagedPart: record.damagedPart||'',
+      originalAssetTag: record.originalAssetTag||'', date: record.date||'',
+      due: record.due||'', notes: record.notes||''
     });
-    const res = await fetch(SHEET_URL + '?' + params.toString());
+    const res  = await fetch(SHEET_URL + '?' + params.toString());
     const json = await res.json();
     if (json.status !== 'ok') console.error('Sheet sync error:', json.message);
   } catch(e) { console.warn('Sheet sync failed:', e); }
@@ -2022,24 +2288,12 @@ async function sendToSheet(record) {
 async function sendReturnToSheet(record) {
   if (SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
   try {
-    const params = new URLSearchParams({
-      action     : 'return',
-      id         : record.id,
-      returnDate : record.returnDate || ''
-    });
-    const res = await fetch(SHEET_URL + '?' + params.toString());
+    const params = new URLSearchParams({ action: 'return', id: record.id, returnDate: record.returnDate||'' });
+    const res  = await fetch(SHEET_URL + '?' + params.toString());
     const json = await res.json();
     if (json.status !== 'ok') console.error('Sheet sync error:', json.message);
   } catch(e) { console.warn('Sheet sync failed:', e); }
 }
-
-// ── Google Sheet sync helpers ─────────────────────────────────────────────────
-//
-//  Strategy:
-//    Single-record ops  → targeted upsert/delete (touches only the affected row)
-//    Bulk CSV imports   → full sheet rewrite (syncInventory / syncAllInventory)
-//
-// ─────────────────────────────────────────────────────────────────────────────
 
 async function sheetPost(payload) {
   if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
@@ -2048,63 +2302,20 @@ async function sheetPost(payload) {
     const res  = await fetch(SHEET_URL, { method: 'POST', body });
     const json = await res.json();
     if (json.status !== 'ok') console.error('Sheet sync error:', payload.action, json.message);
-  } catch(e) {
-    console.error('Sheet sync failed:', payload.action, e);
-  }
+  } catch(e) { console.error('Sheet sync failed:', payload.action, e); }
 }
 
-// ── Loaner pool (Inventory sheet) ────────────────────────────────────────────
+async function upsertDeviceToSheet(device)      { await sheetPost({ action: 'upsertDevice',     device }); }
+async function deleteDeviceFromSheet(assetTag)   { await sheetPost({ action: 'deleteDevice',     assetTag }); }
+async function syncInventoryToSheet()            { await sheetPost({ action: 'syncInventory',    devices: inventory }); }
+async function upsertAllDeviceToSheet(device)    { await sheetPost({ action: 'upsertAllDevice',  device }); }
+async function deleteAllDeviceFromSheet(assetTag){ await sheetPost({ action: 'deleteAllDevice',  assetTag }); }
+async function syncAllInventoryToSheet()         { await sheetPost({ action: 'syncAllInventory', devices: allInventory }); }
+async function upsertPartToSheet(part)           { await sheetPost({ action: 'upsertPart',       part }); }
+async function deletePartFromSheet(partId)       { await sheetPost({ action: 'deletePart',       partId }); }
+async function syncPartsToSheet()                { await sheetPost({ action: 'syncParts',        parts: partsInventory }); }
 
-/** Upsert one device row by Asset Tag. Called on add / inline edit / status change. */
-async function upsertDeviceToSheet(device) {
-  await sheetPost({ action: 'upsertDevice', device });
-}
-
-/** Delete one device row by Asset Tag. Called on Remove. */
-async function deleteDeviceFromSheet(assetTag) {
-  await sheetPost({ action: 'deleteDevice', assetTag });
-}
-
-/** Full rewrite — used only after a bulk CSV import into the loaner pool. */
-async function syncInventoryToSheet() {
-  await sheetPost({ action: 'syncInventory', devices: inventory });
-}
-
-// ── Full Device Inventory (All Inventory sheet) ───────────────────────────────
-
-/** Upsert one device row by Asset Tag. Called on inline edit / single delete. */
-async function upsertAllDeviceToSheet(device) {
-  await sheetPost({ action: 'upsertAllDevice', device });
-}
-
-/** Delete one device row by Asset Tag. Called on Delete button. */
-async function deleteAllDeviceFromSheet(assetTag) {
-  await sheetPost({ action: 'deleteAllDevice', assetTag });
-}
-
-/** Full rewrite — used only after a bulk CSV import into Full Inventory. */
-async function syncAllInventoryToSheet() {
-  await sheetPost({ action: 'syncAllInventory', devices: allInventory });
-}
-
-// ── Parts (Parts sheet) ───────────────────────────────────────────────────────
-
-/** Upsert one part row by internal ID. Called on add / edit. */
-async function upsertPartToSheet(part) {
-  await sheetPost({ action: 'upsertPart', part });
-}
-
-/** Delete one part row by internal ID. Called on delete. */
-async function deletePartFromSheet(partId) {
-  await sheetPost({ action: 'deletePart', partId });
-}
-
-/** Full rewrite — used only on clearParts(). */
-async function syncPartsToSheet() {
-  await sheetPost({ action: 'syncParts', parts: partsInventory });
-}
-
-// ── Inline cell editing ───────────────────────────────────────────────────────
+// ─── Inline cell editing ──────────────────────────────────────────────────────
 
 const CELL_OPTIONS = {
   'building-loaner': ['Bureau Valley High School','Bureau Valley Elementary and Junior High','Bureau Valley Elementary-Wyanet','Bureau Valley North'],
@@ -2114,23 +2325,16 @@ const CELL_OPTIONS = {
 };
 
 function startCellEdit(td, store, field, assetTag, inputType, options) {
-  // Support both old signature (args) and new data-attribute style
   if (td && !store) {
-    store     = td.dataset.store;
-    field     = td.dataset.field;
-    assetTag  = td.dataset.key;
+    store = td.dataset.store; field = td.dataset.field; assetTag = td.dataset.key;
     inputType = td.dataset.type || 'text';
-    options   = td.dataset.options ? CELL_OPTIONS[td.dataset.options] : null;
+    options = td.dataset.options ? CELL_OPTIONS[td.dataset.options] : null;
   }
-
   if (td.querySelector('.cell-editor')) return;
-
   const dataArr = store === 'loaner' ? inventory : allInventory;
   const rec = dataArr.find(d => d.assetTag === assetTag);
   if (!rec) return;
-
   const currentVal = rec[field] || '';
-
   Array.from(td.childNodes).forEach(n => { if (n.nodeType === 1) n.style.display = 'none'; });
 
   let editor;
@@ -2145,17 +2349,14 @@ function startCellEdit(td, store, field, assetTag, inputType, options) {
     });
   } else {
     editor = document.createElement('input');
-    editor.type = 'text';
-    editor.className = 'cell-editor';
-    editor.value = currentVal;
+    editor.type = 'text'; editor.className = 'cell-editor'; editor.value = currentVal;
   }
 
-  td.appendChild(editor);
-  editor.focus();
+  td.appendChild(editor); editor.focus();
   if (editor.tagName === 'INPUT') editor.select();
 
   function commit() {
-    const newVal = editor.tagName === 'SELECT' ? editor.value : editor.value;
+    const newVal = editor.value;
     const oldTag = rec.assetTag;
     rec[field] = newVal;
     if (field === 'assetTag' && store === 'loaner') {
@@ -2164,8 +2365,7 @@ function startCellEdit(td, store, field, assetTag, inputType, options) {
     save();
     if (store === 'loaner') { renderLoaners(); upsertDeviceToSheet(rec); }
     else { renderAllInventory(); upsertAllDeviceToSheet(rec); }
-    renderStats();
-    showToast('Saved.', 'success');
+    renderStats(); showToast('Saved.', 'success');
   }
 
   function cancel() {
@@ -2180,35 +2380,62 @@ function startCellEdit(td, store, field, assetTag, inputType, options) {
     if (e.key === 'Enter') editor.blur();
     if (e.key === 'Escape') { editor.removeEventListener('blur', commit); cancel(); }
   });
-  if (inputType === 'select') {
-    editor.addEventListener('change', function() { editor.blur(); });
-  }
+  if (inputType === 'select') editor.addEventListener('change', function() { editor.blur(); });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Date formatting ──────────────────────────────────────────────────────────
+
+function formatDate(val) {
+  if (!val || val === '—') return '—';
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return val;
+  const hasTime = typeof val === 'string' && /\d{1,2}:\d{2}:\d{2}/.test(val);
+  const datePart = d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric', timeZone:'America/Chicago' });
+  if (!hasTime) return datePart;
+  const timePart = d.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true, timeZone:'America/Chicago' });
+  const isExactMidnight = d.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:false, timeZone:'America/Chicago' }) === '0:00';
+  return isExactMidnight ? datePart : `${datePart} ${timePart} CST`;
+}
+
+function formatDueDate(val) {
+  if (!val || val === '—') return '—';
+  let d;
+  const iso = String(val).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) d = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  else d = new Date(val);
+  if (isNaN(d.getTime())) return val;
+  return d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric', timeZone:'America/Chicago' });
+}
+
+function getTomorrow() {
+  const d = new Date(); d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
 
 function showToast(msg, type='') {
   const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast show ' + type;
+  t.textContent = msg; t.className = 'toast show ' + type;
   setTimeout(() => t.className = 'toast', 3000);
 }
 
 function updateClock() {
   document.getElementById('clock').textContent = new Date().toLocaleString('en-US', { dateStyle:'medium', timeStyle:'short' });
 }
+setInterval(updateClock, 1000); updateClock();
 
-setInterval(updateClock, 1000);
-updateClock();
+// ─── Checkout form helpers ────────────────────────────────────────────────────
 
 function toggleDamagedPart() {
-  const type = document.getElementById('co-type').value;
+  const type    = document.getElementById('co-type').value;
   const section = document.getElementById('damaged-part-section');
   section.style.display = type === 'Needs Repair' ? 'block' : 'none';
   if (type !== 'Needs Repair') {
-    document.getElementById('co-damaged-part').value = '';
+    document.getElementById('co-damaged-part').value  = '';
     document.getElementById('co-damaged-other').value = '';
     document.getElementById('other-text-group').style.display = 'none';
+    stagedRepairParts = []; renderStagedRepairParts();
   }
 }
 
@@ -2217,22 +2444,16 @@ function toggleOtherText() {
   document.getElementById('other-text-group').style.display = val === 'Other' ? 'block' : 'none';
 }
 
-function getTomorrow() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
 document.getElementById('co-due').value = getTomorrow();
 
-// ── Parts Inventory ────────────────────────────────────────────────────────────
+// ─── Parts Inventory ──────────────────────────────────────────────────────────
 
 function renderParts() {
-  const search   = (document.getElementById('parts-search')?.value || '').toLowerCase();
-  const typeF    = document.getElementById('parts-type-filter')?.value || '';
-  const mfrF     = document.getElementById('parts-mfr-filter')?.value || '';
-  const stockF   = document.getElementById('parts-stock-filter')?.value || '';
-  const tbody    = document.getElementById('parts-tbody');
+  const search  = (document.getElementById('parts-search')?.value || '').toLowerCase();
+  const typeF   = document.getElementById('parts-type-filter')?.value || '';
+  const mfrF    = document.getElementById('parts-mfr-filter')?.value  || '';
+  const stockF  = document.getElementById('parts-stock-filter')?.value || '';
+  const tbody   = document.getElementById('parts-tbody');
   if (!tbody) return;
 
   const rows = partsInventory.filter(p => {
@@ -2240,14 +2461,13 @@ function renderParts() {
     const matchType  = !typeF  || p.type === typeF;
     const matchMfr   = !mfrF   || p.mfr  === mfrF;
     const stock = Number(p.stock) || 0;
-    const matchStock = !stockF  ||
+    const matchStock = !stockF ||
       (stockF === 'low'  && stock <= 2) ||
       (stockF === 'ok'   && stock > 2)  ||
       (stockF === 'zero' && stock === 0);
     return matchText && matchType && matchMfr && matchStock;
   });
 
-  // Summary stats
   const totalValue  = partsInventory.reduce((sum, p) => sum + (Number(p.value)||0) * (Number(p.stock)||0), 0);
   const lowStock    = partsInventory.filter(p => Number(p.stock) <= 2).length;
   const uniqueTypes = new Set(partsInventory.map(p => p.type)).size;
@@ -2266,7 +2486,6 @@ function renderParts() {
     return;
   }
 
-  // Cross-reference: gather all model names from both device lists
   const allModels = [...inventory.map(d=>d.model), ...allInventory.map(d=>d.model)].filter(Boolean).map(m=>m.toLowerCase());
 
   tbody.innerHTML = rows.map(p => {
@@ -2278,14 +2497,11 @@ function renderParts() {
       : isLow
         ? 'display:inline-block;background:#fcebeb;color:#a32d2d;font-weight:700;border-radius:5px;padding:2px 8px;min-width:28px;text-align:center;border:1px solid #f0a0a0;'
         : 'display:inline-block;color:var(--accent);font-weight:600;padding:2px 4px;';
-
-    // Model cross-reference check
     const modelKeywords = (p.models||'').split(',').map(m=>m.trim().toLowerCase()).filter(Boolean);
     const hasMatch = modelKeywords.length > 0 && modelKeywords.some(kw => allModels.some(m => m.includes(kw.split(' ').slice(0,3).join(' ')) || kw.includes(m.split(' ').slice(0,3).join(' '))));
     const modelHtml = p.models
       ? `<span style="font-size:12px;color:${hasMatch ? 'var(--accent)' : 'var(--text-muted)'};">${p.models}</span>${hasMatch ? ' <span style="font-size:10px;background:var(--accent-light);color:#085041;padding:1px 5px;border-radius:10px;border:1px solid #9fe1cb;white-space:nowrap;">✓ in inventory</span>' : ''}`
       : '<span style="color:var(--text-muted);font-size:12px;">—</span>';
-
     return `<tr>
       <td><span class="badge" style="background:var(--primary-light);color:var(--primary-dark);font-size:11px;">${p.type||'—'}</span></td>
       <td style="font-size:13px;font-weight:500;">${p.mfr||'—'}</td>
@@ -2311,8 +2527,7 @@ function openAddPart() {
   editingPartId = null;
   document.getElementById('part-form-title').textContent = 'Add New Part';
   ['part-name','part-value','part-stock','part-fru','part-vendor','part-models'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
+    const el = document.getElementById(id); if (el) el.value = '';
   });
   document.getElementById('part-type').value = '';
   document.getElementById('part-mfr').value  = '';
@@ -2320,10 +2535,7 @@ function openAddPart() {
   document.getElementById('add-part-form').scrollIntoView({behavior:'smooth'});
 }
 
-function closeAddPart() {
-  document.getElementById('add-part-form').style.display = 'none';
-  editingPartId = null;
-}
+function closeAddPart() { document.getElementById('add-part-form').style.display = 'none'; editingPartId = null; }
 
 function editPart(id) {
   const p = partsInventory.find(x => x.id === id);
@@ -2351,7 +2563,6 @@ function savePart() {
   const fru    = document.getElementById('part-fru').value.trim();
   const vendor = document.getElementById('part-vendor').value.trim();
   const models = document.getElementById('part-models').value.trim();
-
   if (!name) { showToast('Part name is required.', 'error'); return; }
 
   let savedPart;
@@ -2364,109 +2575,78 @@ function savePart() {
     partsInventory.push(savedPart);
     showToast('Part added!', 'success');
   }
-
-  save();
-  closeAddPart();
-  renderParts();
-  if (savedPart) upsertPartToSheet(savedPart); // only push the affected row
+  save(); closeAddPart(); renderParts(); populateRepairPartsSelect();
+  if (savedPart) upsertPartToSheet(savedPart);
 }
 
 function deletePart(id) {
   if (!confirm('Delete this part?')) return;
   partsInventory = partsInventory.filter(p => p.id !== id);
-  save();
-  renderParts();
-  deletePartFromSheet(id); // only delete that row
+  save(); renderParts(); populateRepairPartsSelect();
+  deletePartFromSheet(id);
   showToast('Part removed.');
 }
 
 function clearParts() {
   if (!confirm(`Clear all ${partsInventory.length} parts? This cannot be undone.`)) return;
-  partsInventory = [];
-  save();
-  renderParts();
-  syncPartsToSheet();
-  showToast('Parts inventory cleared.');
+  partsInventory = []; save(); renderParts(); populateRepairPartsSelect();
+  syncPartsToSheet(); showToast('Parts inventory cleared.');
 }
 
 function exportPartsCSV() {
   const headers = ['Part Type','Manufacturer','Part Name','Value','Stock','FRU/Model #','Compatible Models','Previous Vendor','Line Total'];
   const rows = partsInventory.map(p => [
-    p.type||'', p.mfr||'', p.name||'',
-    p.value != null ? p.value : 0,
-    p.stock != null ? p.stock : 0,
-    p.fru||'', p.models||'', p.vendor||'',
-    ((Number(p.value)||0) * (Number(p.stock)||0)).toFixed(2)
+    p.type||'', p.mfr||'', p.name||'', p.value != null ? p.value : 0, p.stock != null ? p.stock : 0,
+    p.fru||'', p.models||'', p.vendor||'', ((Number(p.value)||0)*(Number(p.stock)||0)).toFixed(2)
   ]);
   const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download = 'parts-inventory-' + new Date().toISOString().slice(0,10) + '.csv';
-  a.click();
-  showToast('Parts CSV exported!', 'success');
+  a.click(); showToast('Parts CSV exported!', 'success');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ── Authentication ────────────────────────────────────────────────────────────
+// ─── Authentication ───────────────────────────────────────────────────────────
 
 (function initAuth() {
   const COOKIE_NAME = 'cls_auth';
   const COOKIE_DAYS = 30;
-
   function getCookie(name) {
     const match = document.cookie.split('; ').find(r => r.startsWith(name + '='));
     return match ? decodeURIComponent(match.split('=')[1]) : null;
   }
-
   function setCookie(name, value, days) {
     const exp = new Date(Date.now() + days * 864e5).toUTCString();
     document.cookie = `${name}=${encodeURIComponent(value)}; expires=${exp}; path=/; SameSite=Strict`;
   }
-
   function unlock() {
     const overlay = document.getElementById('auth-overlay');
-    overlay.style.transition = 'opacity 0.35s';
-    overlay.style.opacity = '0';
+    overlay.style.transition = 'opacity 0.35s'; overlay.style.opacity = '0';
     setTimeout(() => { overlay.style.display = 'none'; }, 350);
     document.body.classList.remove('auth-locked');
   }
-
-  // Check for valid saved session cookie
-  if (getCookie(COOKIE_NAME) === 'granted') {
-    unlock();
-  }
-
+  if (getCookie(COOKIE_NAME) === 'granted') { unlock(); }
   window.checkAuth = function() {
     const input    = document.getElementById('auth-pw');
     const errEl    = document.getElementById('auth-error');
     const remember = document.getElementById('auth-remember').checked;
-    const entered  = input.value;
-
-    // Password stored obfuscated — not plaintext in DOM
-    if (entered === atob('RyFoMm8zczR0NQ==')) {
+    if (input.value === atob('RyFoMm8zczR0NQ==')) {
       errEl.textContent = '';
       if (remember) setCookie(COOKIE_NAME, 'granted', COOKIE_DAYS);
       unlock();
     } else {
       errEl.textContent = 'Incorrect password. Please try again.';
-      input.classList.add('shake');
-      input.value = '';
+      input.classList.add('shake'); input.value = '';
       setTimeout(() => input.classList.remove('shake'), 500);
       input.focus();
     }
   };
-
   window.togglePwVis = function() {
     const input = document.getElementById('auth-pw');
     input.type = input.type === 'password' ? 'text' : 'password';
   };
-
-  // Auto-focus password field
   setTimeout(() => document.getElementById('auth-pw')?.focus(), 50);
 })();
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 loadFromSheet();
 </script>

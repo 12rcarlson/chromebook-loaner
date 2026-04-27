@@ -769,7 +769,10 @@
     Chromebook Loaner System
     <span class="school-name">— Bureau Valley</span>
   </div>
-  <span style="font-size:13px; opacity:0.65;" id="clock"></span>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span style="font-size:13px; opacity:0.65;" id="clock"></span>
+    <button class="btn btn-secondary btn-sm" type="button" onclick="signOut()" style="border-color:rgba(255,255,255,0.35);background:rgba(255,255,255,0.12);color:#fff;">Sign Out</button>
+  </div>
 </header>
 
 <nav>
@@ -1272,6 +1275,8 @@
 
 <script>
 const SHEET_URL = 'https://script.google.com/macros/s/AKfycbzvBrK3_CNCZ81yXveTcKOtXrV1cpQuXsyts5gqXmev83Vi5dWYph7-Gwax3zk7Cn4X/exec';
+const AUTH_TOKEN_KEY = 'cls_auth_token';
+const AUTH_REMEMBER_KEY = 'cls_auth_remember';
 
 // ── Data stores ───────────────────────────────────────────────────────────────
 let checkouts      = [];
@@ -1291,6 +1296,60 @@ let dashboardBuilding = '';
 // ── Repair parts staged for current checkout ─────────────────────────────────
 let stagedRepairParts = []; // [{partId, partName, qty}]
 
+function getAuthToken() {
+  return sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY) || '';
+}
+
+function setAuthToken(token, remember) {
+  sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.setItem(AUTH_REMEMBER_KEY, remember ? '1' : '0');
+  (remember ? localStorage : sessionStorage).setItem(AUTH_TOKEN_KEY, token);
+}
+
+function clearAuthToken() {
+  sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_REMEMBER_KEY);
+}
+
+function signOut() {
+  clearAuthToken();
+  checkouts = [];
+  inventory = [];
+  allInventory = [];
+  partsInventory = [];
+  ['checkouts','inventory','allInventory','partsInventory','recentStudents'].forEach(key => localStorage.removeItem(key));
+  const overlay = document.getElementById('auth-overlay');
+  overlay.style.display = 'flex';
+  overlay.style.opacity = '1';
+  document.body.classList.add('auth-locked');
+  setTimeout(() => document.getElementById('auth-pw')?.focus(), 50);
+}
+
+function escapeHtml(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[ch]));
+}
+
+function jsStringAttr(value) {
+  return escapeHtml(String(value == null ? '' : value)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r?\n/g, ' '));
+}
+
+function csvCell(value) {
+  let text = String(value == null ? '' : value);
+  if (/^[=+\-@]/.test(text)) text = "'" + text;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
 // ─── Startup loader ───────────────────────────────────────────────────────────
 
 function showLoadingOverlay(msg) {
@@ -1303,16 +1362,33 @@ function hideLoadingOverlay() {
   if (el) { el.style.opacity = '0'; setTimeout(() => { el.style.display = 'none'; el.style.opacity = '1'; }, 400); }
 }
 
+async function apiPost(payload, options = {}) {
+  if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return null;
+  const bodyPayload = { ...payload };
+  if (!options.skipAuth) {
+    const token = getAuthToken();
+    if (!token) throw new Error('Not signed in.');
+    bodyPayload.authToken = token;
+  }
+  const body = new URLSearchParams({ payload: JSON.stringify(bodyPayload) });
+  const res = await fetch(SHEET_URL, { method: 'POST', body });
+  const json = await res.json();
+  if (json.status !== 'ok') {
+    if (/token|session|auth/i.test(json.message || '')) clearAuthToken();
+    throw new Error(json.message || 'Request failed.');
+  }
+  return json;
+}
+
 async function loadFromSheet() {
+  if (SHEET_URL && SHEET_URL !== 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE' && !getAuthToken()) return;
   if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') {
     loadFromLocalStorage();
     return;
   }
   showLoadingOverlay('Syncing from Google Sheets…');
   try {
-    const res  = await fetch(SHEET_URL + '?action=getAll');
-    const json = await res.json();
-    if (json.status !== 'ok') throw new Error(json.message || 'Sheet returned error');
+    const json = await apiPost({ action: 'getAll' });
 
     checkouts = (json.checkouts || []).map(c => ({ ...c, id: Number(c.id) || 0 }));
     inventory = json.inventory || [];
@@ -1338,6 +1414,14 @@ async function loadFromSheet() {
     loadStudentNames();
   } catch(err) {
     console.warn('Sheet load failed, falling back to localStorage:', err);
+    if (/token|session|auth|signed in/i.test(err.message || '')) {
+      clearAuthToken();
+      document.getElementById('auth-overlay').style.display = 'flex';
+      document.getElementById('auth-overlay').style.opacity = '1';
+      document.body.classList.add('auth-locked');
+      hideLoadingOverlay();
+      return;
+    }
     loadFromLocalStorage();
     hideLoadingOverlay();
     showToast('Could not reach Sheet — using local cache.', 'error');
@@ -1356,9 +1440,8 @@ function loadFromLocalStorage() {
 
 async function loadStudentNames() {
   try {
-    const res  = await fetch(`${SHEET_URL}?action=getStudents`);
-    const json = await res.json();
-    if (json.status !== 'ok' || !json.students) return;
+    const json = await apiPost({ action: 'getStudents' });
+    if (!json.students) return;
     const dl = document.getElementById('student-names-list');
     dl.innerHTML = '';
     json.students.forEach(name => {
@@ -1419,13 +1502,13 @@ function badgeHtml(type) {
     'Lost':          'badge-lost',
     'Daily Loaner':  'badge-active',
   };
-  return `<span class="badge ${map[type]||''}">${type}</span>`;
+  return `<span class="badge ${map[type]||''}">${escapeHtml(type)}</span>`;
 }
 
 function statusBadge(s) {
   if (s === 'Active')   return `<span class="badge badge-active">Active</span>`;
   if (s === 'Returned') return `<span class="badge badge-returned">Returned</span>`;
-  return `<span class="badge badge-returned">${s}</span>`;
+  return `<span class="badge badge-returned">${escapeHtml(s)}</span>`;
 }
 
 // ─── Days-out helper ──────────────────────────────────────────────────────────
@@ -1487,10 +1570,10 @@ function renderDashboard() {
   }
   tbody.innerHTML = active.map(c => `
     <tr>
-      <td>${c.studentName}<br><span style="font-size:11px;color:var(--text-muted)">${c.building||''}</span></td>
-      <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${c.assetTag}</code></td>
+      <td>${escapeHtml(c.studentName)}<br><span style="font-size:11px;color:var(--text-muted)">${escapeHtml(c.building||'')}</span></td>
+      <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${escapeHtml(c.assetTag)}</code></td>
       <td>${badgeHtml(c.type)}</td>
-      <td style="font-size:13px;color:var(--text-muted)">${formatDueDate(c.due) || '—'}</td>
+      <td style="font-size:13px;color:var(--text-muted)">${escapeHtml(formatDueDate(c.due) || '-')}</td>
       <td>${daysOutBadge(c)}</td>
     </tr>`).join('');
 }
@@ -1505,9 +1588,9 @@ function renderIncidentSummary() {
   }
   tbody.innerHTML = recent.map(c => `
     <tr>
-      <td style="font-size:13px">${c.studentName}</td>
+      <td style="font-size:13px">${escapeHtml(c.studentName)}</td>
       <td>${badgeHtml(c.type)}</td>
-      <td style="font-size:12px;color:var(--text-muted)">${formatDate(c.date)}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(formatDate(c.date))}</td>
     </tr>`).join('');
 }
 
@@ -1580,13 +1663,13 @@ function renderIncidents() {
 
   tbody.innerHTML = rows.map(c => `
     <tr>
-      <td style="font-size:12px;color:var(--text-muted)">${c.id}</td>
-      <td>${c.studentName}<br><span style="font-size:11px;color:var(--text-muted)">${c.building||''}</span></td>
-      <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 5px;border-radius:4px;">${c.assetTag}</code></td>
-      <td style="font-size:12px;color:var(--text-muted)">${c.serial||'—'}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(c.id)}</td>
+      <td>${escapeHtml(c.studentName)}<br><span style="font-size:11px;color:var(--text-muted)">${escapeHtml(c.building||'')}</span></td>
+      <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 5px;border-radius:4px;">${escapeHtml(c.assetTag)}</code></td>
+      <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(c.serial||'-')}</td>
       <td>${badgeHtml(c.type)}</td>
-      <td style="font-size:12px">${formatDate(c.date)}</td>
-      <td style="font-size:12px">${formatDueDate(c.due)||'—'}</td>
+      <td style="font-size:12px">${escapeHtml(formatDate(c.date))}</td>
+      <td style="font-size:12px">${escapeHtml(formatDueDate(c.due)||'-')}</td>
       <td>${daysOutBadge(c)}</td>
       <td>${statusBadge(c.status)}</td>
       <td>
@@ -1602,7 +1685,7 @@ function renderIncidents() {
 
 function loanerStatusBadge(s) {
   const cls = s === 'Available' ? 'badge-active' : s === 'On Loan' ? 'badge-returned' : 'badge-repair';
-  return `<span class="badge ${cls}">${s}</span>`;
+  return `<span class="badge ${cls}">${escapeHtml(s)}</span>`;
 }
 
 function renderLoaners() {
@@ -1621,22 +1704,22 @@ function renderLoaners() {
 
   tbody.innerHTML = rows.slice(0, 200).map(d => `
     <tr>
-      <td class="editable" onclick="startCellEdit(this,'loaner','assetTag','${d.assetTag}','text')">
-        <code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${d.assetTag}</code><span class="edit-hint">✎</span>
+      <td class="editable" onclick="startCellEdit(this,'loaner','assetTag','${jsStringAttr(d.assetTag)}','text')">
+        <code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${escapeHtml(d.assetTag)}</code><span class="edit-hint">✎</span>
       </td>
-      <td class="editable" onclick="startCellEdit(this,'loaner','model','${d.assetTag}','text')">
-        <span style="font-size:13px">${d.model}</span><span class="edit-hint">✎</span>
+      <td class="editable" onclick="startCellEdit(this,'loaner','model','${jsStringAttr(d.assetTag)}','text')">
+        <span style="font-size:13px">${escapeHtml(d.model)}</span><span class="edit-hint">✎</span>
       </td>
-      <td class="editable" onclick="startCellEdit(this,'loaner','serial','${d.assetTag}','text')">
-        <span style="font-size:12px;color:var(--text-muted)">${d.serial||''}</span><span class="edit-hint">✎</span>
+      <td class="editable" onclick="startCellEdit(this,'loaner','serial','${jsStringAttr(d.assetTag)}','text')">
+        <span style="font-size:12px;color:var(--text-muted)">${escapeHtml(d.serial||'')}</span><span class="edit-hint">✎</span>
       </td>
-      <td class="editable" data-store="loaner" data-field="building" data-key="${d.assetTag}" data-type="select" data-options="building-loaner" onclick="startCellEdit(this)">
-        <span style="font-size:12px;color:var(--text-muted)">${d.building||'—'}</span><span class="edit-hint">✎</span>
+      <td class="editable" data-store="loaner" data-field="building" data-key="${escapeHtml(d.assetTag)}" data-type="select" data-options="building-loaner" onclick="startCellEdit(this)">
+        <span style="font-size:12px;color:var(--text-muted)">${escapeHtml(d.building||'-')}</span><span class="edit-hint">✎</span>
       </td>
-      <td class="editable" data-store="loaner" data-field="status" data-key="${d.assetTag}" data-type="select" data-options="status-loaner" onclick="startCellEdit(this)">
+      <td class="editable" data-store="loaner" data-field="status" data-key="${escapeHtml(d.assetTag)}" data-type="select" data-options="status-loaner" onclick="startCellEdit(this)">
         ${loanerStatusBadge(d.status)}<span class="edit-hint">✎</span>
       </td>
-      <td><button class="btn btn-danger btn-sm" onclick="removeDevice('${d.assetTag}')">Remove</button></td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeDevice('${jsStringAttr(d.assetTag)}')">Remove</button></td>
     </tr>`).join('');
 
   if (rows.length > 200) {
@@ -1673,25 +1756,25 @@ function renderAllInventory() {
     const statusCls = d.status==='Assigned' ? 'badge-returned' : d.status==='Unassigned' ? 'badge-active' : d.status==='Loaner'||d.status==='Daily Loaner' ? 'badge-active' : 'badge-repair';
     return `
     <tr>
-      <td class="editable" onclick="startCellEdit(this,'all','assetTag','${d.assetTag}','text')">
-        <code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${d.assetTag}</code><span class="edit-hint">✎</span>
+      <td class="editable" onclick="startCellEdit(this,'all','assetTag','${jsStringAttr(d.assetTag)}','text')">
+        <code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${escapeHtml(d.assetTag)}</code><span class="edit-hint">✎</span>
       </td>
-      <td class="editable" onclick="startCellEdit(this,'all','model','${d.assetTag}','text')">
-        <span style="font-size:13px">${d.model}</span><span class="edit-hint">✎</span>
+      <td class="editable" onclick="startCellEdit(this,'all','model','${jsStringAttr(d.assetTag)}','text')">
+        <span style="font-size:13px">${escapeHtml(d.model)}</span><span class="edit-hint">✎</span>
       </td>
-      <td class="editable" onclick="startCellEdit(this,'all','serial','${d.assetTag}','text')">
-        <span style="font-size:12px;color:var(--text-muted)">${d.serial||''}</span><span class="edit-hint">✎</span>
+      <td class="editable" onclick="startCellEdit(this,'all','serial','${jsStringAttr(d.assetTag)}','text')">
+        <span style="font-size:12px;color:var(--text-muted)">${escapeHtml(d.serial||'')}</span><span class="edit-hint">✎</span>
       </td>
-      <td class="editable" data-store="all" data-field="building" data-key="${d.assetTag}" data-type="select" data-options="building-all" onclick="startCellEdit(this)">
-        <span style="font-size:12px;color:var(--text-muted)">${d.building||'—'}</span><span class="edit-hint">✎</span>
+      <td class="editable" data-store="all" data-field="building" data-key="${escapeHtml(d.assetTag)}" data-type="select" data-options="building-all" onclick="startCellEdit(this)">
+        <span style="font-size:12px;color:var(--text-muted)">${escapeHtml(d.building||'-')}</span><span class="edit-hint">✎</span>
       </td>
-      <td class="editable" onclick="startCellEdit(this,'all','owner','${d.assetTag}','text')">
-        <span style="font-size:12px;color:var(--text-muted)">${d.owner||'—'}</span><span class="edit-hint">✎</span>
+      <td class="editable" onclick="startCellEdit(this,'all','owner','${jsStringAttr(d.assetTag)}','text')">
+        <span style="font-size:12px;color:var(--text-muted)">${escapeHtml(d.owner||'-')}</span><span class="edit-hint">✎</span>
       </td>
-      <td class="editable" data-store="all" data-field="status" data-key="${d.assetTag}" data-type="select" data-options="status-all" onclick="startCellEdit(this)">
-        <span class="badge ${statusCls}">${d.status}</span><span class="edit-hint">✎</span>
+      <td class="editable" data-store="all" data-field="status" data-key="${escapeHtml(d.assetTag)}" data-type="select" data-options="status-all" onclick="startCellEdit(this)">
+        <span class="badge ${statusCls}">${escapeHtml(d.status)}</span><span class="edit-hint">✎</span>
       </td>
-      <td><button class="btn btn-danger btn-sm" onclick="removeAllInvDevice('${d.assetTag}')">Delete</button></td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeAllInvDevice('${jsStringAttr(d.assetTag)}')">Delete</button></td>
     </tr>`;
   }).join('');
 
@@ -1710,10 +1793,10 @@ function renderAvailable() {
   }
   tbody.innerHTML = avail.map(d => `
     <tr>
-      <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${d.assetTag}</code></td>
-      <td style="font-size:13px">${d.model || '—'}</td>
-      <td><span class="badge badge-active">${d.status}</span></td>
-      <td><button class="btn btn-secondary btn-sm" onclick="prefillDevice('${d.assetTag}','${(d.serial||'').replace(/'/g,"\\'")}')">Select</button></td>
+      <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${escapeHtml(d.assetTag)}</code></td>
+      <td style="font-size:13px">${escapeHtml(d.model || '-')}</td>
+      <td><span class="badge badge-active">${escapeHtml(d.status)}</span></td>
+      <td><button class="btn btn-secondary btn-sm" onclick="prefillDevice('${jsStringAttr(d.assetTag)}','${jsStringAttr(d.serial||'')}')">Select</button></td>
     </tr>`).join('');
 }
 
@@ -1775,8 +1858,8 @@ function renderRecentStudents() {
   if (!recent.length) { bar.innerHTML = ''; return; }
   bar.innerHTML = `<span class="recent-label">Recent:</span>` +
     recent.map(name =>
-      `<button class="recent-student-btn" type="button" onclick="selectRecentStudent('${name.replace(/'/g,"\\'")}')">
-        ${name}
+      `<button class="recent-student-btn" type="button" onclick="selectRecentStudent('${jsStringAttr(name)}')">
+        ${escapeHtml(name)}
       </button>`
     ).join('');
 }
@@ -1837,8 +1920,8 @@ function renderStagedRepairParts() {
   if (!stagedRepairParts.length) { list.innerHTML = ''; return; }
   list.innerHTML = stagedRepairParts.map(x => `
     <div class="rp-item">
-      <span><strong>${x.partName}</strong> &times; ${x.qty}</span>
-      <button class="rp-remove" onclick="removeRepairPart('${x.partId}')" title="Remove">✕</button>
+      <span><strong>${escapeHtml(x.partName)}</strong> &times; ${escapeHtml(x.qty)}</span>
+      <button class="rp-remove" onclick="removeRepairPart('${jsStringAttr(x.partId)}')" title="Remove">x</button>
     </div>`).join('');
 }
 
@@ -1860,7 +1943,7 @@ function commitRepairParts() {
 
 // ─── Checkout ─────────────────────────────────────────────────────────────────
 
-function submitCheckout() {
+async function submitCheckout() {
   const name        = document.getElementById('co-student-name').value.trim();
   const grade       = document.getElementById('co-grade').value;
   const building    = document.getElementById('co-building').value;
@@ -1897,14 +1980,14 @@ function submitCheckout() {
   pushRecentStudent(name);
 
   save();
-  sendToSheet(record);
-  if (dev) upsertDeviceToSheet(dev);
+  const checkoutSynced = await sendToSheet(record);
+  if (dev) await upsertDeviceToSheet(dev);
   clearCheckoutForm();
   refreshAll();
-  showToast('Checkout saved!', 'success');
+  showToast(checkoutSynced === false ? 'Saved locally. Sheet sync failed.' : 'Checkout saved!', checkoutSynced === false ? 'error' : 'success');
 }
 
-function returnDevice(id) {
+async function returnDevice(id) {
   const rec = checkouts.find(c => c.id === id);
   if (!rec) return;
   rec.status = 'Returned';
@@ -1913,9 +1996,9 @@ function returnDevice(id) {
   if (dev) dev.status = 'Available';
   save();
   refreshAll();
-  sendReturnToSheet(rec);
-  if (dev) upsertDeviceToSheet(dev);
-  showToast('Device marked as returned.', 'success');
+  const returnSynced = await sendReturnToSheet(rec);
+  if (dev) await upsertDeviceToSheet(dev);
+  showToast(returnSynced === false ? 'Returned locally. Sheet sync failed.' : 'Device marked as returned.', returnSynced === false ? 'error' : 'success');
 }
 
 function deleteRecord(id) {
@@ -1923,6 +2006,7 @@ function deleteRecord(id) {
   checkouts = checkouts.filter(c => c.id !== id);
   save();
   refreshAll();
+  deleteCheckoutFromSheet(id);
   showToast('Record deleted.');
 }
 
@@ -2240,7 +2324,7 @@ function clearCheckoutForm() {
 function exportCSV() {
   const headers = ['ID','Student Name','Grade','Building','Asset Tag','Serial','Type','Damaged Part','Date','Due Back','Status','Notes'];
   const rows    = checkouts.map(c => [c.id, c.studentName, c.grade||'', c.building||'', c.assetTag, c.serial||'', c.type, c.damagedPart||'', c.date, c.due||'', c.status, c.notes||'']);
-  const csv     = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const csv     = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download = 'loaner-records-' + new Date().toISOString().slice(0,10) + '.csv';
@@ -2250,7 +2334,7 @@ function exportCSV() {
 function exportLoanersCSV() {
   const headers = ['Asset Tag','Serial Number','Model','Building','Status'];
   const rows = inventory.map(d => [d.assetTag||'', d.serial||'', d.model||'', d.building||'', d.status||'']);
-  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const csv = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download = 'loaner-devices-' + new Date().toISOString().slice(0,10) + '.csv';
@@ -2260,7 +2344,7 @@ function exportLoanersCSV() {
 function exportAllInventoryCSV() {
   const headers = ['Asset Tag','Serial Number','Model','Building','Assigned To','Status'];
   const rows = allInventory.map(d => [d.assetTag||'', d.serial||'', d.model||'', d.building||'', d.owner||'', d.status||'']);
-  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const csv = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download = 'full-inventory-' + new Date().toISOString().slice(0,10) + '.csv';
@@ -2270,42 +2354,29 @@ function exportAllInventoryCSV() {
 // ─── Sheet sync helpers ───────────────────────────────────────────────────────
 
 async function sendToSheet(record) {
-  if (SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
-  try {
-    const params = new URLSearchParams({
-      action: 'checkout', id: record.id, studentName: record.studentName||'',
-      grade: record.grade||'', building: record.building||'', assetTag: record.assetTag||'',
-      serial: record.serial||'', type: record.type||'', damagedPart: record.damagedPart||'',
-      originalAssetTag: record.originalAssetTag||'', date: record.date||'',
-      due: record.due||'', notes: record.notes||''
-    });
-    const res  = await fetch(SHEET_URL + '?' + params.toString());
-    const json = await res.json();
-    if (json.status !== 'ok') console.error('Sheet sync error:', json.message);
-  } catch(e) { console.warn('Sheet sync failed:', e); }
+  if (SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return true;
+  return sheetPost({ action: 'checkout', ...record });
 }
 
 async function sendReturnToSheet(record) {
-  if (SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
-  try {
-    const params = new URLSearchParams({ action: 'return', id: record.id, returnDate: record.returnDate||'' });
-    const res  = await fetch(SHEET_URL + '?' + params.toString());
-    const json = await res.json();
-    if (json.status !== 'ok') console.error('Sheet sync error:', json.message);
-  } catch(e) { console.warn('Sheet sync failed:', e); }
+  if (SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return true;
+  return sheetPost({ action: 'return', id: record.id, returnDate: record.returnDate || '' });
 }
 
 async function sheetPost(payload) {
-  if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return;
+  if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return true;
   try {
-    const body = new URLSearchParams({ payload: JSON.stringify(payload) });
-    const res  = await fetch(SHEET_URL, { method: 'POST', body });
-    const json = await res.json();
-    if (json.status !== 'ok') console.error('Sheet sync error:', payload.action, json.message);
-  } catch(e) { console.error('Sheet sync failed:', payload.action, e); }
+    await apiPost(payload);
+    return true;
+  } catch(e) {
+    console.error('Sheet sync failed:', payload.action, e);
+    showToast('Sheet sync failed: ' + (e.message || payload.action), 'error');
+    return false;
+  }
 }
 
 async function upsertDeviceToSheet(device)      { await sheetPost({ action: 'upsertDevice',     device }); }
+async function deleteCheckoutFromSheet(id)      { await sheetPost({ action: 'deleteCheckout',   id }); }
 async function deleteDeviceFromSheet(assetTag)   { await sheetPost({ action: 'deleteDevice',     assetTag }); }
 async function syncInventoryToSheet()            { await sheetPost({ action: 'syncInventory',    devices: inventory }); }
 async function upsertAllDeviceToSheet(device)    { await sheetPost({ action: 'upsertAllDevice',  device }); }
@@ -2500,21 +2571,21 @@ function renderParts() {
     const modelKeywords = (p.models||'').split(',').map(m=>m.trim().toLowerCase()).filter(Boolean);
     const hasMatch = modelKeywords.length > 0 && modelKeywords.some(kw => allModels.some(m => m.includes(kw.split(' ').slice(0,3).join(' ')) || kw.includes(m.split(' ').slice(0,3).join(' '))));
     const modelHtml = p.models
-      ? `<span style="font-size:12px;color:${hasMatch ? 'var(--accent)' : 'var(--text-muted)'};">${p.models}</span>${hasMatch ? ' <span style="font-size:10px;background:var(--accent-light);color:#085041;padding:1px 5px;border-radius:10px;border:1px solid #9fe1cb;white-space:nowrap;">✓ in inventory</span>' : ''}`
+      ? `<span style="font-size:12px;color:${hasMatch ? 'var(--accent)' : 'var(--text-muted)'};">${escapeHtml(p.models)}</span>${hasMatch ? ' <span style="font-size:10px;background:var(--accent-light);color:#085041;padding:1px 5px;border-radius:10px;border:1px solid #9fe1cb;white-space:nowrap;">✓ in inventory</span>' : ''}`
       : '<span style="color:var(--text-muted);font-size:12px;">—</span>';
     return `<tr>
-      <td><span class="badge" style="background:var(--primary-light);color:var(--primary-dark);font-size:11px;">${p.type||'—'}</span></td>
-      <td style="font-size:13px;font-weight:500;">${p.mfr||'—'}</td>
-      <td><strong style="font-size:13px;">${p.name||'—'}</strong></td>
+      <td><span class="badge" style="background:var(--primary-light);color:var(--primary-dark);font-size:11px;">${escapeHtml(p.type||'-')}</span></td>
+      <td style="font-size:13px;font-weight:500;">${escapeHtml(p.mfr||'-')}</td>
+      <td><strong style="font-size:13px;">${escapeHtml(p.name||'-')}</strong></td>
       <td style="font-size:13px;">${p.value != null ? '$' + Number(p.value).toFixed(2) : '—'}</td>
       <td style="text-align:center;"><span style="${stockStyle}">${stock}</span>${isLow || isZero ? ' <span style="font-size:10px;color:var(--warning);">⚠</span>' : ''}</td>
-      <td style="font-size:12px;font-family:monospace;color:var(--text-muted);">${p.fru||'—'}</td>
+      <td style="font-size:12px;font-family:monospace;color:var(--text-muted);">${escapeHtml(p.fru||'-')}</td>
       <td style="max-width:200px;">${modelHtml}</td>
-      <td style="font-size:12px;color:var(--text-muted);">${p.vendor||'—'}</td>
+      <td style="font-size:12px;color:var(--text-muted);">${escapeHtml(p.vendor||'-')}</td>
       <td>
         <div class="actions">
-          <button class="btn btn-secondary btn-sm" onclick="editPart('${p.id}')">Edit</button>
-          <button class="btn btn-danger btn-sm" onclick="deletePart('${p.id}')">✕</button>
+          <button class="btn btn-secondary btn-sm" onclick="editPart('${jsStringAttr(p.id)}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deletePart('${jsStringAttr(p.id)}')">x</button>
         </div>
       </td>
     </tr>`;
@@ -2599,7 +2670,7 @@ function exportPartsCSV() {
     p.type||'', p.mfr||'', p.name||'', p.value != null ? p.value : 0, p.stock != null ? p.stock : 0,
     p.fru||'', p.models||'', p.vendor||'', ((Number(p.value)||0)*(Number(p.stock)||0)).toFixed(2)
   ]);
-  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const csv = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download = 'parts-inventory-' + new Date().toISOString().slice(0,10) + '.csv';
@@ -2609,33 +2680,30 @@ function exportPartsCSV() {
 // ─── Authentication ───────────────────────────────────────────────────────────
 
 (function initAuth() {
-  const COOKIE_NAME = 'cls_auth';
-  const COOKIE_DAYS = 30;
-  function getCookie(name) {
-    const match = document.cookie.split('; ').find(r => r.startsWith(name + '='));
-    return match ? decodeURIComponent(match.split('=')[1]) : null;
-  }
-  function setCookie(name, value, days) {
-    const exp = new Date(Date.now() + days * 864e5).toUTCString();
-    document.cookie = `${name}=${encodeURIComponent(value)}; expires=${exp}; path=/; SameSite=Strict`;
-  }
   function unlock() {
     const overlay = document.getElementById('auth-overlay');
     overlay.style.transition = 'opacity 0.35s'; overlay.style.opacity = '0';
     setTimeout(() => { overlay.style.display = 'none'; }, 350);
     document.body.classList.remove('auth-locked');
   }
-  if (getCookie(COOKIE_NAME) === 'granted') { unlock(); }
-  window.checkAuth = function() {
+  if (getAuthToken()) {
+    unlock();
+    loadFromSheet();
+  }
+  window.checkAuth = async function() {
     const input    = document.getElementById('auth-pw');
     const errEl    = document.getElementById('auth-error');
     const remember = document.getElementById('auth-remember').checked;
-    if (input.value === atob('RyFoMm8zczR0NQ==')) {
+    errEl.textContent = '';
+    try {
+      const json = await apiPost({ action: 'login', password: input.value }, { skipAuth: true });
+      setAuthToken(json.token, remember);
+      input.value = '';
       errEl.textContent = '';
-      if (remember) setCookie(COOKIE_NAME, 'granted', COOKIE_DAYS);
       unlock();
-    } else {
-      errEl.textContent = 'Incorrect password. Please try again.';
+      loadFromSheet();
+    } catch(err) {
+      errEl.textContent = err.message || 'Sign in failed. Please try again.';
       input.classList.add('shake'); input.value = '';
       setTimeout(() => input.classList.remove('shake'), 500);
       input.focus();
@@ -2648,7 +2716,7 @@ function exportPartsCSV() {
   setTimeout(() => document.getElementById('auth-pw')?.focus(), 50);
 })();
 
-loadFromSheet();
+if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') loadFromSheet();
 </script>
 </body>
 </html>

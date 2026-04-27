@@ -1,6 +1,12 @@
 # Chromebook Loaner System
 **Bureau Valley School District**
 
+## Security Update
+
+The current app now expects the Apps Script backend to issue an auth token before any Sheet data loads. After pasting `scripts/Code.gs.txt` into Apps Script, run `setupSpreadsheet`, then edit and run `setupAuthPassword` once. Remove the plaintext password from that helper after the hash is saved, then create a new web app deployment.
+
+Use a Workspace-restricted deployment, such as "Anyone within Bureau Valley", when possible. Use "Anyone" only if your hosting setup cannot call a domain-restricted Apps Script web app.
+
 A lightweight, browser-based Chromebook loaner tracking system inspired by TDT Asset Manager. Runs entirely from a single HTML file — no server required. Optionally syncs to Google Sheets via Apps Script.
 
 ---

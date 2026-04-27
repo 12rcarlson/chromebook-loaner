@@ -1,7 +1,7 @@
 /**
  * Chromebook Loaner System - Google Apps Script
  * -----------------------------------------------
- * Deploy as a Web App (Execute as: Me, Access: Anyone)
+ * Deploy as a Web App (Execute as: Me, Access: Anyone within your domain when possible)
  * Paste the Web App URL into index.html -> SHEET_URL
  *
  * Sheet tabs:
@@ -45,6 +45,46 @@ const PARTS_HEADERS = [
 // Column K (11) stores the internal app part ID — hidden helper, not shown to users
 const PART_ID_COL = 11;
 
+// Student OUs to pull from for autocomplete
+const STUDENT_OUS = [
+  '/BVHS Students',
+  '/BVJHE Students',
+  '/BVN-BVWE Students'
+];
+
+const AUTH_TOKEN_SECONDS = 12 * 60 * 60;
+const MAX_BULK_ROWS = 6000;
+const ALLOWED_INCIDENT_TYPES = ['Forgot Device', 'Needs Repair', 'Lost', 'Daily Loaner'];
+const ALLOWED_CHECKOUT_STATUSES = ['Active', 'Returned'];
+const ALLOWED_LOANER_STATUSES = ['Available', 'On Loan', 'Loaner', 'Daily Loaner', 'Needs Repair'];
+const ALLOWED_ALL_INVENTORY_STATUSES = ['Assigned', 'Unassigned', 'Loaner', 'Daily Loaner', 'Needs Repair', 'Forgot Device'];
+const ALLOWED_BUILDINGS = [
+  '',
+  'Bureau Valley High School',
+  'Bureau Valley Elementary and Junior High',
+  'Bureau Valley Elementary-Wyanet',
+  'Bureau Valley North'
+];
+
+// Optional email allowlist. Leave empty to allow any signed-in Workspace user
+// when the web app is deployed to your domain.
+const ALLOWED_EMAILS = [];
+
+// Run setupAuthPassword() once from the Apps Script editor after changing
+// NEW_STAFF_PASSWORD below. Do not leave the real password in source control.
+function setupAuthPassword() {
+  const NEW_STAFF_PASSWORD = 'CHANGE_ME_BEFORE_RUNNING';
+  if (NEW_STAFF_PASSWORD === 'CHANGE_ME_BEFORE_RUNNING') {
+    throw new Error('Edit NEW_STAFF_PASSWORD inside setupAuthPassword() before running it.');
+  }
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('APP_PASSWORD_HASH', sha256Base64_(NEW_STAFF_PASSWORD));
+  if (!props.getProperty('APP_SESSION_SECRET')) {
+    props.setProperty('APP_SESSION_SECRET', Utilities.getUuid() + Utilities.getUuid());
+  }
+  Logger.log('Chromebook Loaner password hash saved. Remove the plaintext password from setupAuthPassword() now.');
+}
+
 // ─── Response helper ──────────────────────────────────────────────────────────
 
 function jsonResponse(obj) {
@@ -53,20 +93,169 @@ function jsonResponse(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+function parsePayload_(e) {
+  if (e.parameter && e.parameter.payload) return JSON.parse(e.parameter.payload);
+  if (e.postData && e.postData.contents) return JSON.parse(e.postData.contents);
+  throw new Error('No data received');
+}
+
+function sha256Base64_(value) {
+  const bytes = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    String(value),
+    Utilities.Charset.UTF_8
+  );
+  return Utilities.base64EncodeWebSafe(bytes);
+}
+
+function signToken_(payload) {
+  const secret = PropertiesService.getScriptProperties().getProperty('APP_SESSION_SECRET');
+  if (!secret) throw new Error('Authentication is not configured. Run setupAuthPassword().');
+  const bytes = Utilities.computeHmacSha256Signature(payload, secret);
+  return Utilities.base64EncodeWebSafe(bytes);
+}
+
+function createToken_() {
+  const email = (Session.getActiveUser().getEmail() || '').toLowerCase();
+  if (ALLOWED_EMAILS.length && ALLOWED_EMAILS.indexOf(email) === -1) {
+    throw new Error('This Google account is not allowed to use this app.');
+  }
+  const payload = Utilities.base64EncodeWebSafe(JSON.stringify({
+    email: email,
+    exp: Math.floor(Date.now() / 1000) + AUTH_TOKEN_SECONDS,
+    nonce: Utilities.getUuid()
+  }));
+  return payload + '.' + signToken_(payload);
+}
+
+function verifyToken_(token) {
+  if (!token || String(token).indexOf('.') === -1) throw new Error('Missing auth token.');
+  const parts = String(token).split('.');
+  const payload = parts[0];
+  const expected = signToken_(payload);
+  if (parts[1] !== expected) throw new Error('Invalid auth token.');
+
+  const decoded = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(payload)).getDataAsString());
+  if (!decoded.exp || decoded.exp < Math.floor(Date.now() / 1000)) throw new Error('Session expired.');
+  const email = String(decoded.email || '').toLowerCase();
+  if (ALLOWED_EMAILS.length && ALLOWED_EMAILS.indexOf(email) === -1) {
+    throw new Error('This Google account is not allowed to use this app.');
+  }
+  return decoded;
+}
+
+function handleLogin_(data) {
+  const expected = PropertiesService.getScriptProperties().getProperty('APP_PASSWORD_HASH');
+  if (!expected) throw new Error('Authentication is not configured. Run setupAuthPassword().');
+  if (sha256Base64_(data.password || '') !== expected) throw new Error('Incorrect password.');
+  return jsonResponse({ status: 'ok', token: createToken_(), expiresIn: AUTH_TOKEN_SECONDS });
+}
+
+function cleanText_(value, maxLen) {
+  const text = String(value == null ? '' : value).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim();
+  return text.slice(0, maxLen || 250);
+}
+
+function assertAllowed_(value, allowed, field) {
+  if (allowed.indexOf(String(value || '')) === -1) throw new Error('Invalid ' + field + ': ' + value);
+}
+
+function assertBulk_(rows, label) {
+  if (!Array.isArray(rows)) throw new Error(label + ' must be an array.');
+  if (rows.length > MAX_BULK_ROWS) throw new Error(label + ' exceeds the max import size of ' + MAX_BULK_ROWS + '.');
+}
+
+function validateCheckout_(d) {
+  if (!d || typeof d !== 'object') throw new Error('Checkout payload is required.');
+  const record = {
+    id              : cleanText_(d.id, 40),
+    studentName     : cleanText_(d.studentName, 120),
+    grade           : cleanText_(d.grade, 20),
+    building        : cleanText_(d.building, 120),
+    assetTag        : cleanText_(d.assetTag, 80),
+    serial          : cleanText_(d.serial, 120),
+    type            : cleanText_(d.type, 40),
+    damagedPart     : cleanText_(d.damagedPart, 160),
+    originalAssetTag: cleanText_(d.originalAssetTag, 80),
+    date            : cleanText_(d.date, 80),
+    due             : cleanText_(d.due, 80),
+    notes           : cleanText_(d.notes, 1000),
+  };
+  if (!record.id || !record.studentName || !record.assetTag || !record.type) {
+    throw new Error('Checkout requires ID, student name, asset tag, and incident type.');
+  }
+  assertAllowed_(record.type, ALLOWED_INCIDENT_TYPES, 'incident type');
+  assertAllowed_(record.building, ALLOWED_BUILDINGS, 'building');
+  return record;
+}
+
+function validateLoanerDevice_(d) {
+  if (!d || typeof d !== 'object') throw new Error('Device payload is required.');
+  const device = {
+    assetTag: cleanText_(d.assetTag, 80),
+    serial  : cleanText_(d.serial, 120),
+    model   : cleanText_(d.model, 160),
+    building: cleanText_(d.building, 120),
+    status  : cleanText_(d.status || 'Available', 40),
+  };
+  if (!device.assetTag) throw new Error('Asset tag is required.');
+  assertAllowed_(device.status, ALLOWED_LOANER_STATUSES, 'loaner status');
+  assertAllowed_(device.building, ALLOWED_BUILDINGS, 'building');
+  return device;
+}
+
+function validateAllInventoryDevice_(d) {
+  if (!d || typeof d !== 'object') throw new Error('Inventory payload is required.');
+  const device = {
+    assetTag: cleanText_(d.assetTag, 80),
+    serial  : cleanText_(d.serial, 120),
+    model   : cleanText_(d.model, 160),
+    building: cleanText_(d.building, 120),
+    owner   : cleanText_(d.owner, 160),
+    status  : cleanText_(d.status || 'Unassigned', 40),
+  };
+  if (!device.assetTag) throw new Error('Asset tag is required.');
+  assertAllowed_(device.status, ALLOWED_ALL_INVENTORY_STATUSES, 'inventory status');
+  assertAllowed_(device.building, ALLOWED_BUILDINGS, 'building');
+  return device;
+}
+
+function validatePart_(p) {
+  if (!p || typeof p !== 'object') throw new Error('Part payload is required.');
+  const part = {
+    id    : cleanText_(p.id, 80),
+    type  : cleanText_(p.type, 80),
+    mfr   : cleanText_(p.mfr, 80),
+    name  : cleanText_(p.name, 180),
+    value : Math.max(0, Number(p.value) || 0),
+    stock : Math.max(0, Math.floor(Number(p.stock) || 0)),
+    fru   : cleanText_(p.fru, 120),
+    models: cleanText_(p.models, 500),
+    vendor: cleanText_(p.vendor, 180),
+  };
+  if (!part.name) throw new Error('Part name is required.');
+  return part;
+}
+
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 function doPost(e) {
   try {
-    let data;
-    if (e.parameter && e.parameter.payload) {
-      data = JSON.parse(e.parameter.payload);
-    } else if (e.postData && e.postData.contents) {
-      data = JSON.parse(e.postData.contents);
-    } else {
-      throw new Error('No data received');
+    const data = parsePayload_(e);
+    if (data.action === 'login') return handleLogin_(data);
+    verifyToken_(data.authToken);
+
+    if (data.action === 'getAll') return getAllData_();
+    if (data.action === 'getStudents') return getStudents_();
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
+    try {
+      logRequest(data);
+      dispatch(data);
+    } finally {
+      lock.releaseLock();
     }
-    logRequest(data);
-    dispatch(data);
     return jsonResponse({ status: 'ok', action: data.action });
   } catch (err) {
     Logger.log('doPost error: ' + err.message);
@@ -74,10 +263,163 @@ function doPost(e) {
   }
 }
 
+function getStudents_() {
+  try {
+    const names = [];
+    STUDENT_OUS.forEach(ou => {
+      let pageToken = null;
+      do {
+        const params = {
+          domain     : 'bureauvalley.net',
+          query      : "orgUnitPath='" + ou + "'",
+          maxResults : 500,
+          orderBy    : 'familyName',
+          projection : 'basic',
+          fields     : 'nextPageToken,users(name)'
+        };
+        if (pageToken) params.pageToken = pageToken;
+        const result = AdminDirectory.Users.list(params);
+        (result.users || []).forEach(u => {
+          if (u.name && u.name.fullName) names.push(u.name.fullName);
+        });
+        pageToken = result.nextPageToken;
+      } while (pageToken);
+    });
+    return jsonResponse({ status: 'ok', students: [...new Set(names)].sort() });
+  } catch(err) {
+    Logger.log('getStudents error: ' + err.message);
+    return jsonResponse({ status: 'error', message: err.message });
+  }
+}
+
+function getAllData_() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const checkoutSheet = ss.getSheetByName(CHECKOUT_SHEET);
+    let checkouts = [];
+    if (checkoutSheet && checkoutSheet.getLastRow() > 1) {
+      const rows = checkoutSheet.getRange(2, 1, checkoutSheet.getLastRow() - 1, CHECKOUT_HEADERS.length).getValues();
+      checkouts = rows
+        .filter(r => r[0] !== '' && r[0] !== null)
+        .map(r => ({
+          id              : r[0],
+          studentName     : String(r[1]  || ''),
+          grade           : String(r[2]  || ''),
+          building        : String(r[3]  || ''),
+          assetTag        : String(r[4]  || ''),
+          serial          : String(r[5]  || ''),
+          type            : String(r[6]  || ''),
+          damagedPart     : String(r[7]  || ''),
+          originalAssetTag: String(r[8]  || ''),
+          date            : String(r[9]  || ''),
+          due             : String(r[10] || ''),
+          status          : String(r[11] || ''),
+          returnDate      : String(r[12] || ''),
+          notes           : String(r[13] || ''),
+        }));
+    }
+
+    const invSheet = ss.getSheetByName(INVENTORY_SHEET);
+    let inventory = [];
+    if (invSheet && invSheet.getLastRow() > 1) {
+      const rows = invSheet.getRange(2, 1, invSheet.getLastRow() - 1, INVENTORY_HEADERS.length).getValues();
+      inventory = rows
+        .filter(r => r[0] !== '' && r[0] !== null)
+        .map(r => ({
+          assetTag: String(r[0] || ''),
+          serial  : String(r[1] || ''),
+          model   : String(r[2] || ''),
+          building: String(r[3] || ''),
+          status  : String(r[4] || ''),
+        }));
+    }
+
+    const allInvSheet = ss.getSheetByName(ALL_INVENTORY_SHEET);
+    let allInventory = [];
+    if (allInvSheet && allInvSheet.getLastRow() > 1) {
+      const rows = allInvSheet.getRange(2, 1, allInvSheet.getLastRow() - 1, ALL_INVENTORY_HEADERS.length).getValues();
+      allInventory = rows
+        .filter(r => r[0] !== '' && r[0] !== null)
+        .map(r => ({
+          assetTag: String(r[0] || ''),
+          serial  : String(r[1] || ''),
+          model   : String(r[2] || ''),
+          building: String(r[3] || ''),
+          owner   : String(r[4] || ''),
+          status  : String(r[5] || ''),
+        }));
+    }
+
+    const partsSheet = ss.getSheetByName(PARTS_SHEET);
+    let parts = [];
+    if (partsSheet && partsSheet.getLastRow() > 1) {
+      const rows = partsSheet.getRange(2, 1, partsSheet.getLastRow() - 1, PART_ID_COL).getValues();
+      parts = rows
+        .filter(r => r[2] !== 'TOTAL INVENTORY VALUE' && r[0] !== '' && r[0] !== null)
+        .map(r => ({
+          type  : String(r[0] || ''),
+          mfr   : String(r[1] || ''),
+          name  : String(r[2] || ''),
+          value : Number(r[3]) || 0,
+          stock : Number(r[4]) || 0,
+          fru   : String(r[5] || ''),
+          models: String(r[6] || ''),
+          vendor: String(r[7] || ''),
+          id    : String(r[10] || ''),
+        }));
+    }
+
+    return jsonResponse({
+      status      : 'ok',
+      checkouts   : checkouts,
+      inventory   : inventory,
+      allInventory: allInventory,
+      parts       : parts,
+    });
+  } catch(err) {
+    Logger.log('getAllData error: ' + err.message);
+    return jsonResponse({ status: 'error', message: err.message });
+  }
+}
+
 function doGet(e) {
+  return jsonResponse({ status: 'error', message: 'GET actions are disabled. Use POST with an auth token.' });
   const action = e.parameter && e.parameter.action;
   if (action) {
-    // getAll — load all four sheets in one call for startup sync
+
+    // ── getStudents — fetch all student names from Google Admin Directory ──
+    if (action === 'getStudents') {
+      try {
+        const names = [];
+        STUDENT_OUS.forEach(ou => {
+          let pageToken = null;
+          do {
+            const params = {
+              domain     : 'bureauvalley.net',
+              query      : "orgUnitPath='" + ou + "'",
+              maxResults : 500,
+              orderBy    : 'familyName',
+              projection : 'basic',
+              fields     : 'nextPageToken,users(name)'
+            };
+            if (pageToken) params.pageToken = pageToken;
+            const result = AdminDirectory.Users.list(params);
+            (result.users || []).forEach(u => {
+              if (u.name && u.name.fullName) names.push(u.name.fullName);
+            });
+            pageToken = result.nextPageToken;
+          } while (pageToken);
+        });
+        // Sort and deduplicate
+        const unique = [...new Set(names)].sort();
+        return jsonResponse({ status: 'ok', students: unique });
+      } catch(err) {
+        Logger.log('getStudents error: ' + err.message);
+        return jsonResponse({ status: 'error', message: err.message });
+      }
+    }
+
+    // ── getAll — load all four sheets in one call for startup sync ──
     if (action === 'getAll') {
       try {
         const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -204,6 +546,7 @@ function dispatch(data) {
     // Checkouts (always row-level)
     case 'checkout':         appendCheckout(data);                                    break;
     case 'return':           markReturned(data.id, data.returnDate);                  break;
+    case 'deleteCheckout':   deleteCheckout(data.id);                                 break;
 
     // Loaner pool — single record
     case 'upsertDevice':     upsertDevice(data.device);                               break;
@@ -235,6 +578,7 @@ function dispatch(data) {
 // ─── Checkouts ────────────────────────────────────────────────────────────────
 
 function appendCheckout(d) {
+  d = validateCheckout_(d);
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, CHECKOUT_SHEET);
   ensureHeaders(sheet, CHECKOUT_HEADERS);
@@ -249,6 +593,8 @@ function appendCheckout(d) {
 }
 
 function markReturned(id, returnDate) {
+  id = cleanText_(id, 40);
+  returnDate = cleanText_(returnDate, 80);
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, CHECKOUT_SHEET);
   const data  = sheet.getDataRange().getValues();
@@ -263,9 +609,22 @@ function markReturned(id, returnDate) {
   }
 }
 
+function deleteCheckout(id) {
+  id = cleanText_(id, 40);
+  if (!id) throw new Error('Checkout ID is required.');
+  const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = getOrCreateSheet(ss, CHECKOUT_SHEET);
+  const rowNum = findRowByKey(sheet, id, 1);
+  if (!rowNum) return;
+  sheet.deleteRow(rowNum);
+  conditionalFormat(sheet);
+  SpreadsheetApp.flush();
+}
+
 // ─── Loaner Inventory — targeted upsert ──────────────────────────────────────
 
 function upsertDevice(d) {
+  d = validateLoanerDevice_(d);
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, INVENTORY_SHEET);
   const now   = new Date().toLocaleString('en-US');
@@ -308,6 +667,7 @@ function inventoryStatusColor(status) {
 // ─── All Inventory — targeted upsert ─────────────────────────────────────────
 
 function upsertAllDevice(d) {
+  d = validateAllInventoryDevice_(d);
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, ALL_INVENTORY_SHEET);
   const now   = new Date().toLocaleString('en-US');
@@ -349,11 +709,9 @@ function allInventoryStatusColor(status) {
 
 // ─── Shared row delete (Inventory + All Inventory) ────────────────────────────
 
-/**
- * Delete a row identified by `key` in `keyCol`, then restripe shifted rows.
- * statusCol is the 1-indexed column holding the status value for color coding.
- */
 function deleteSheetRow(key, sheetName, keyCol, numCols, statusColorFn, statusCol) {
+  key = cleanText_(key, 80);
+  if (!key) throw new Error('Delete key is required.');
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, sheetName);
   const rowNum = findRowByKey(sheet, key, keyCol);
@@ -367,6 +725,7 @@ function deleteSheetRow(key, sheetName, keyCol, numCols, statusColorFn, statusCo
 // ─── Parts — targeted upsert / delete ────────────────────────────────────────
 
 function upsertPart(p) {
+  p = validatePart_(p);
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, PARTS_SHEET);
   const now   = new Date().toLocaleString('en-US');
@@ -399,6 +758,8 @@ function upsertPart(p) {
 }
 
 function deletePart(partId) {
+  partId = cleanText_(partId, 80);
+  if (!partId) throw new Error('Part ID is required.');
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, PARTS_SHEET);
   const rowNum = findRowByKey(sheet, partId, PART_ID_COL);
@@ -423,7 +784,6 @@ function stockStatusColor(stock) {
 }
 
 function updatePartsTotalsRow(sheet) {
-  // Remove any existing totals row
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return;
   const colC = sheet.getRange(2, 3, lastRow - 1, 1).getValues();
@@ -447,6 +807,8 @@ function updatePartsTotalsRow(sheet) {
 // ─── Bulk full-rewrite (CSV imports only) ─────────────────────────────────────
 
 function syncInventory(devices) {
+  assertBulk_(devices, 'devices');
+  devices = devices.map(validateLoanerDevice_);
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, INVENTORY_SHEET);
   const now   = new Date().toLocaleString('en-US');
@@ -470,6 +832,8 @@ function syncInventory(devices) {
 }
 
 function syncAllInventory(devices) {
+  assertBulk_(devices, 'devices');
+  devices = devices.map(validateAllInventoryDevice_);
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, ALL_INVENTORY_SHEET);
   const now   = new Date().toLocaleString('en-US');
@@ -496,6 +860,8 @@ function syncAllInventory(devices) {
 }
 
 function syncParts(parts) {
+  assertBulk_(parts, 'parts');
+  parts = parts.map(validatePart_);
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, PARTS_SHEET);
   const now   = new Date().toLocaleString('en-US');
@@ -530,7 +896,6 @@ function syncParts(parts) {
 
 // ─── Utility helpers ──────────────────────────────────────────────────────────
 
-/** Find 1-indexed sheet row where colIndex matches key. Returns null if not found. */
 function findRowByKey(sheet, key, colIndex) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return null;
@@ -541,7 +906,6 @@ function findRowByKey(sheet, key, colIndex) {
   return null;
 }
 
-/** Re-apply alternating row shading from fromRow to end, fixing colors after a delete. */
 function restripeFrom(sheet, fromRow, numCols, statusCol, statusColorFn, oddBg) {
   const lastRow = sheet.getLastRow();
   if (fromRow > lastRow) return;
@@ -556,7 +920,6 @@ function restripeFrom(sheet, fromRow, numCols, statusCol, statusColorFn, oddBg) 
   }
 }
 
-/** Clear all data rows (row 2 onward) content and background. */
 function clearDataRows(sheet, numCols) {
   const lastRow = sheet.getLastRow();
   if (lastRow > 1) {
@@ -568,7 +931,11 @@ function logRequest(data) {
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, LOG_SHEET);
   ensureHeaders(sheet, ['Timestamp', 'Action', 'Payload']);
-  sheet.appendRow([new Date().toISOString(), data.action || 'unknown', JSON.stringify(data)]);
+  const safe = Object.assign({}, data);
+  delete safe.authToken;
+  if (safe.studentName) safe.studentName = '[redacted]';
+  if (safe.password) safe.password = '[redacted]';
+  sheet.appendRow([new Date().toISOString(), data.action || 'unknown', JSON.stringify(safe)]);
 }
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
@@ -633,7 +1000,7 @@ function setupSpreadsheet() {
   ensureHeaders(parts, PARTS_HEADERS);
   parts.setColumnWidths(1, PARTS_HEADERS.length, 140);
   parts.setColumnWidth(3, 220); parts.setColumnWidth(7, 200);
-  parts.hideColumns(PART_ID_COL); // hide the internal ID column
+  parts.hideColumns(PART_ID_COL);
 
   SpreadsheetApp.flush();
   Logger.log('Setup complete.');
@@ -649,4 +1016,14 @@ function updateCheckoutHeaders() {
   sheet.setColumnWidth(2, 160); sheet.setColumnWidth(4, 220);
   SpreadsheetApp.flush();
   Logger.log('Headers updated.');
+}
+function testGetStudents() {
+  const result = AdminDirectory.Users.list({
+    domain: 'bureauvalley.net',
+    query: "orgUnitPath='/BVHS Students'",
+    maxResults: 1,
+    projection: 'basic',
+    fields: 'users(name)'
+  });
+  Logger.log(JSON.stringify(result));
 }

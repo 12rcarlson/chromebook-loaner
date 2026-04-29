@@ -166,6 +166,23 @@
 
     .form-group.full { grid-column: 1 / -1; }
 
+    .field-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .field-hint {
+      min-height: 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .field-hint.error { color: var(--danger); }
+    .field-hint.warning { color: var(--warning); }
+    .field-hint.success { color: var(--accent); }
+
     label {
       font-size: 13px;
       font-weight: 500;
@@ -752,7 +769,7 @@
     </div>
     <div class="remember-row">
       <input type="checkbox" id="auth-remember" checked />
-      <label for="auth-remember">Remember this browser for 30 days</label>
+      <label for="auth-remember">Remember this browser for the day</label>
     </div>
     <button class="auth-btn" onclick="checkAuth()">Sign In</button>
     <div id="auth-error"></div>
@@ -867,11 +884,15 @@
       <div class="card-body">
         <div class="form-grid">
           <div class="form-group full">
-            <label for="co-student-name">Student Name</label>
+            <div class="field-row">
+              <label for="co-student-name">Student Name</label>
+              <button class="btn btn-secondary btn-sm" type="button" onclick="loadStudentNames({ forceRefresh: true })">Refresh Names</button>
+            </div>
             <!-- NEW: Recent students quick-pick -->
             <div id="recent-students-bar"></div>
             <input type="text" id="co-student-name" placeholder="First Last" list="student-names-list" autocomplete="off" />
             <datalist id="student-names-list"></datalist>
+            <div id="student-list-status" class="field-hint" aria-live="polite"></div>
           </div>
           <select id="co-grade" style="display:none"></select>
           <div class="form-group">
@@ -1277,6 +1298,8 @@
 const SHEET_URL = 'https://script.google.com/macros/s/AKfycbzvBrK3_CNCZ81yXveTcKOtXrV1cpQuXsyts5gqXmev83Vi5dWYph7-Gwax3zk7Cn4X/exec';
 const AUTH_TOKEN_KEY = 'cls_auth_token';
 const AUTH_REMEMBER_KEY = 'cls_auth_remember';
+const STUDENT_NAMES_CACHE_KEY = 'cls_student_names_cache';
+const STUDENT_NAMES_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 // ── Data stores ───────────────────────────────────────────────────────────────
 let checkouts      = [];
@@ -1350,6 +1373,17 @@ function csvCell(value) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function shouldRetryApiError(err, attempt, maxAttempts) {
+  if (attempt >= maxAttempts) return false;
+  const msg = String(err && err.message || '');
+  if (/token|session|auth|incorrect password|not signed in/i.test(msg)) return false;
+  return /failed to fetch|network|timeout|temporar|quota|rate|service|unavailable|unexpected response|exception/i.test(msg);
+}
+
 // ─── Startup loader ───────────────────────────────────────────────────────────
 
 function showLoadingOverlay(msg) {
@@ -1364,20 +1398,40 @@ function hideLoadingOverlay() {
 
 async function apiPost(payload, options = {}) {
   if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return null;
-  const bodyPayload = { ...payload };
-  if (!options.skipAuth) {
-    const token = getAuthToken();
-    if (!token) throw new Error('Not signed in.');
-    bodyPayload.authToken = token;
+  const maxAttempts = Math.max(1, (options.retries == null ? 2 : Number(options.retries)) + 1);
+  let lastErr;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const bodyPayload = { ...payload };
+      if (!options.skipAuth) {
+        const token = getAuthToken();
+        if (!token) throw new Error('Not signed in.');
+        bodyPayload.authToken = token;
+      }
+      const body = new URLSearchParams({ payload: JSON.stringify(bodyPayload) });
+      const res = await fetch(SHEET_URL, { method: 'POST', body, cache: 'no-store' });
+      if (!res.ok) throw new Error(`Apps Script returned HTTP ${res.status}.`);
+
+      let json;
+      try {
+        json = await res.json();
+      } catch(e) {
+        throw new Error('Unexpected response from Apps Script.');
+      }
+
+      if (json.status !== 'ok') {
+        if (/token|session|auth/i.test(json.message || '')) clearAuthToken();
+        throw new Error(json.message || 'Request failed.');
+      }
+      return json;
+    } catch(err) {
+      lastErr = err;
+      if (!shouldRetryApiError(err, attempt, maxAttempts)) break;
+      await delay(350 * attempt);
+    }
   }
-  const body = new URLSearchParams({ payload: JSON.stringify(bodyPayload) });
-  const res = await fetch(SHEET_URL, { method: 'POST', body });
-  const json = await res.json();
-  if (json.status !== 'ok') {
-    if (/token|session|auth/i.test(json.message || '')) clearAuthToken();
-    throw new Error(json.message || 'Request failed.');
-  }
-  return json;
+  throw lastErr;
 }
 
 async function loadFromSheet() {
@@ -1438,19 +1492,80 @@ function loadFromLocalStorage() {
   refreshAll();
 }
 
-async function loadStudentNames() {
+function setStudentListStatus(message, type='') {
+  const el = document.getElementById('student-list-status');
+  if (!el) return;
+  el.textContent = message || '';
+  el.className = 'field-hint ' + type;
+}
+
+function renderStudentNames(names) {
+  const dl = document.getElementById('student-names-list');
+  if (!dl) return 0;
+  dl.innerHTML = '';
+  (names || []).forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    dl.appendChild(opt);
+  });
+  return names ? names.length : 0;
+}
+
+function getCachedStudentNames() {
   try {
-    const json = await apiPost({ action: 'getStudents' });
-    if (!json.students) return;
-    const dl = document.getElementById('student-names-list');
-    dl.innerHTML = '';
-    json.students.forEach(name => {
-      const opt = document.createElement('option');
-      opt.value = name;
-      dl.appendChild(opt);
-    });
+    const cached = JSON.parse(localStorage.getItem(STUDENT_NAMES_CACHE_KEY) || 'null');
+    if (!cached || !Array.isArray(cached.names)) return null;
+    const updatedMs = Date.parse(cached.updatedAt || '');
+    return {
+      names: cached.names,
+      updatedAt: cached.updatedAt || '',
+      expired: !updatedMs || Date.now() - updatedMs > STUDENT_NAMES_CACHE_MAX_AGE_MS
+    };
+  } catch(e) {
+    return null;
+  }
+}
+
+function cacheStudentNames(names, updatedAt) {
+  try {
+    localStorage.setItem(STUDENT_NAMES_CACHE_KEY, JSON.stringify({
+      names,
+      updatedAt: updatedAt || new Date().toISOString()
+    }));
+  } catch(e) {
+    console.warn('Could not cache student names:', e);
+  }
+}
+
+async function loadStudentNames(options = {}) {
+  const cached = getCachedStudentNames();
+  if (cached && cached.names.length && !cached.expired && !options.forceRefresh) {
+    renderStudentNames(cached.names);
+    setStudentListStatus(`${cached.names.length} names ready.`, 'success');
+  } else if (cached && cached.names.length) {
+    renderStudentNames(cached.names);
+    setStudentListStatus('Using saved names while refreshing...', 'warning');
+  } else {
+    setStudentListStatus('Loading student names...');
+  }
+
+  try {
+    const json = await apiPost({ action: 'getStudents', forceRefresh: options.forceRefresh === true }, { retries: 2 });
+    const names = json.students || [];
+    if (!names.length) throw new Error('No student names returned.');
+    const count = renderStudentNames(names);
+    cacheStudentNames(names, json.updatedAt);
+    const source = json.cached ? 'cached directory list' : 'Admin Directory';
+    const statusType = json.stale ? 'warning' : 'success';
+    setStudentListStatus(`${count} names loaded from ${source}.`, statusType);
   } catch(err) {
     console.warn('Could not load student names:', err);
+    if (cached && cached.names.length) {
+      renderStudentNames(cached.names);
+      setStudentListStatus(`Student lookup is using the saved list (${cached.names.length} names).`, 'warning');
+      return;
+    }
+    setStudentListStatus('Student lookup is unavailable. You can still type the name manually.', 'error');
   }
 }
 

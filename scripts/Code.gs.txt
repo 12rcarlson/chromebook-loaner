@@ -52,6 +52,12 @@ const STUDENT_OUS = [
   '/BVN-BVWE Students'
 ];
 
+const STUDENT_CACHE_KEY = 'STUDENT_NAMES_CACHE_V1';
+const STUDENT_CACHE_CHUNK_PREFIX = STUDENT_CACHE_KEY + '_CHUNK_';
+const STUDENT_CACHE_CHUNK_COUNT_KEY = STUDENT_CACHE_KEY + '_CHUNK_COUNT';
+const STUDENT_CACHE_CHUNK_SIZE = 8000;
+const STUDENT_CACHE_SECONDS = 6 * 60 * 60;
+const STUDENT_CACHE_STALE_SECONDS = 7 * 24 * 60 * 60;
 const AUTH_TOKEN_SECONDS = 12 * 60 * 60;
 const MAX_BULK_ROWS = 6000;
 const ALLOWED_INCIDENT_TYPES = ['Forgot Device', 'Needs Repair', 'Lost', 'Daily Loaner'];
@@ -73,7 +79,7 @@ const ALLOWED_EMAILS = [];
 // Run setupAuthPassword() once from the Apps Script editor after changing
 // NEW_STAFF_PASSWORD below. Do not leave the real password in source control.
 function setupAuthPassword() {
-  const NEW_STAFF_PASSWORD = 'CHANGE_ME_BEFORE_RUNNING';
+  const NEW_STAFF_PASSWORD = 'REMOVED';
   if (NEW_STAFF_PASSWORD === 'CHANGE_ME_BEFORE_RUNNING') {
     throw new Error('Edit NEW_STAFF_PASSWORD inside setupAuthPassword() before running it.');
   }
@@ -246,7 +252,7 @@ function doPost(e) {
     verifyToken_(data.authToken);
 
     if (data.action === 'getAll') return getAllData_();
-    if (data.action === 'getStudents') return getStudents_();
+    if (data.action === 'getStudents') return getStudents_(data.forceRefresh === true);
 
     const lock = LockService.getScriptLock();
     lock.waitLock(10000);
@@ -263,33 +269,134 @@ function doPost(e) {
   }
 }
 
-function getStudents_() {
-  try {
-    const names = [];
-    STUDENT_OUS.forEach(ou => {
-      let pageToken = null;
-      do {
-        const params = {
-          domain     : 'bureauvalley.net',
-          query      : "orgUnitPath='" + ou + "'",
-          maxResults : 500,
-          orderBy    : 'familyName',
-          projection : 'basic',
-          fields     : 'nextPageToken,users(name)'
-        };
-        if (pageToken) params.pageToken = pageToken;
-        const result = AdminDirectory.Users.list(params);
-        (result.users || []).forEach(u => {
-          if (u.name && u.name.fullName) names.push(u.name.fullName);
-        });
-        pageToken = result.nextPageToken;
-      } while (pageToken);
+function getStudents_(forceRefresh) {
+  const cached = getCachedStudents_();
+  if (!forceRefresh && cached && !cached.stale) {
+    return jsonResponse({
+      status: 'ok',
+      students: cached.students,
+      cached: true,
+      updatedAt: cached.updatedAt
     });
-    return jsonResponse({ status: 'ok', students: [...new Set(names)].sort() });
+  }
+
+  try {
+    const names = fetchStudentNamesFromDirectory_();
+    const updatedAt = new Date().toISOString();
+    cacheStudents_(names, updatedAt);
+    return jsonResponse({ status: 'ok', students: names, cached: false, updatedAt: updatedAt });
   } catch(err) {
     Logger.log('getStudents error: ' + err.message);
+    if (cached && cached.students.length) {
+      return jsonResponse({
+        status: 'ok',
+        students: cached.students,
+        cached: true,
+        stale: true,
+        updatedAt: cached.updatedAt,
+        message: 'Student directory is temporarily unavailable. Using the last cached list.'
+      });
+    }
     return jsonResponse({ status: 'error', message: err.message });
   }
+}
+
+function fetchStudentNamesFromDirectory_() {
+  const names = [];
+  STUDENT_OUS.forEach(ou => {
+    let pageToken = null;
+    do {
+      const params = {
+        domain     : 'bureauvalley.net',
+        query      : "orgUnitPath='" + ou + "'",
+        maxResults : 500,
+        orderBy    : 'familyName',
+        projection : 'basic',
+        fields     : 'nextPageToken,users(name)'
+      };
+      if (pageToken) params.pageToken = pageToken;
+      const result = AdminDirectory.Users.list(params);
+      (result.users || []).forEach(u => {
+        if (u.name && u.name.fullName) names.push(u.name.fullName);
+      });
+      pageToken = result.nextPageToken;
+    } while (pageToken);
+  });
+  return [...new Set(names)].sort();
+}
+
+function getCachedStudents_() {
+  const raw = CacheService.getScriptCache().get(STUDENT_CACHE_KEY) || getStoredStudentCache_();
+  if (!raw) return null;
+  try {
+    const cached = JSON.parse(raw);
+    const updatedMs = Date.parse(cached.updatedAt || '');
+    const ageSeconds = updatedMs ? (Date.now() - updatedMs) / 1000 : STUDENT_CACHE_STALE_SECONDS + 1;
+    return {
+      students: Array.isArray(cached.students) ? cached.students : [],
+      updatedAt: cached.updatedAt || '',
+      stale: ageSeconds > STUDENT_CACHE_SECONDS
+    };
+  } catch(err) {
+    Logger.log('getCachedStudents parse error: ' + err.message);
+    return null;
+  }
+}
+
+function cacheStudents_(students, updatedAt) {
+  const payload = JSON.stringify({ students: students, updatedAt: updatedAt });
+  try {
+    CacheService.getScriptCache().put(STUDENT_CACHE_KEY, payload, STUDENT_CACHE_SECONDS);
+  } catch(err) {
+    Logger.log('cacheStudents CacheService error: ' + err.message);
+  }
+  storeStudentCache_(payload);
+}
+
+function getStoredStudentCache_() {
+  const props = PropertiesService.getScriptProperties();
+  const direct = props.getProperty(STUDENT_CACHE_KEY);
+  if (direct) return direct;
+
+  const count = Number(props.getProperty(STUDENT_CACHE_CHUNK_COUNT_KEY) || 0);
+  if (!count) return null;
+
+  let raw = '';
+  for (let i = 0; i < count; i++) {
+    raw += props.getProperty(STUDENT_CACHE_CHUNK_PREFIX + i) || '';
+  }
+  return raw || null;
+}
+
+function storeStudentCache_(payload) {
+  const props = PropertiesService.getScriptProperties();
+  try {
+    clearStudentCacheChunks_(props);
+    if (payload.length <= STUDENT_CACHE_CHUNK_SIZE) {
+      props.setProperty(STUDENT_CACHE_KEY, payload);
+      return;
+    }
+
+    props.deleteProperty(STUDENT_CACHE_KEY);
+    const count = Math.ceil(payload.length / STUDENT_CACHE_CHUNK_SIZE);
+    for (let i = 0; i < count; i++) {
+      props.setProperty(
+        STUDENT_CACHE_CHUNK_PREFIX + i,
+        payload.slice(i * STUDENT_CACHE_CHUNK_SIZE, (i + 1) * STUDENT_CACHE_CHUNK_SIZE)
+      );
+    }
+    props.setProperty(STUDENT_CACHE_CHUNK_COUNT_KEY, String(count));
+  } catch(err) {
+    Logger.log('storeStudentCache error: ' + err.message);
+  }
+}
+
+function clearStudentCacheChunks_(props) {
+  const count = Number(props.getProperty(STUDENT_CACHE_CHUNK_COUNT_KEY) || 0);
+  for (let i = 0; i < count; i++) {
+    props.deleteProperty(STUDENT_CACHE_CHUNK_PREFIX + i);
+  }
+  props.deleteProperty(STUDENT_CACHE_CHUNK_COUNT_KEY);
 }
 
 function getAllData_() {
@@ -384,161 +491,6 @@ function getAllData_() {
 
 function doGet(e) {
   return jsonResponse({ status: 'error', message: 'GET actions are disabled. Use POST with an auth token.' });
-  const action = e.parameter && e.parameter.action;
-  if (action) {
-
-    // ── getStudents — fetch all student names from Google Admin Directory ──
-    if (action === 'getStudents') {
-      try {
-        const names = [];
-        STUDENT_OUS.forEach(ou => {
-          let pageToken = null;
-          do {
-            const params = {
-              domain     : 'bureauvalley.net',
-              query      : "orgUnitPath='" + ou + "'",
-              maxResults : 500,
-              orderBy    : 'familyName',
-              projection : 'basic',
-              fields     : 'nextPageToken,users(name)'
-            };
-            if (pageToken) params.pageToken = pageToken;
-            const result = AdminDirectory.Users.list(params);
-            (result.users || []).forEach(u => {
-              if (u.name && u.name.fullName) names.push(u.name.fullName);
-            });
-            pageToken = result.nextPageToken;
-          } while (pageToken);
-        });
-        // Sort and deduplicate
-        const unique = [...new Set(names)].sort();
-        return jsonResponse({ status: 'ok', students: unique });
-      } catch(err) {
-        Logger.log('getStudents error: ' + err.message);
-        return jsonResponse({ status: 'error', message: err.message });
-      }
-    }
-
-    // ── getAll — load all four sheets in one call for startup sync ──
-    if (action === 'getAll') {
-      try {
-        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-
-        // Parse checkouts sheet into structured records
-        const checkoutSheet = ss.getSheetByName(CHECKOUT_SHEET);
-        let checkouts = [];
-        if (checkoutSheet && checkoutSheet.getLastRow() > 1) {
-          const rows = checkoutSheet.getRange(2, 1, checkoutSheet.getLastRow() - 1, CHECKOUT_HEADERS.length).getValues();
-          checkouts = rows
-            .filter(r => r[0] !== '' && r[0] !== null)
-            .map(r => ({
-              id              : r[0],
-              studentName     : String(r[1]  || ''),
-              grade           : String(r[2]  || ''),
-              building        : String(r[3]  || ''),
-              assetTag        : String(r[4]  || ''),
-              serial          : String(r[5]  || ''),
-              type            : String(r[6]  || ''),
-              damagedPart     : String(r[7]  || ''),
-              originalAssetTag: String(r[8]  || ''),
-              date            : String(r[9]  || ''),
-              due             : String(r[10] || ''),
-              status          : String(r[11] || ''),
-              returnDate      : String(r[12] || ''),
-              notes           : String(r[13] || ''),
-            }));
-        }
-
-        // Parse loaner inventory sheet
-        const invSheet = ss.getSheetByName(INVENTORY_SHEET);
-        let inventory = [];
-        if (invSheet && invSheet.getLastRow() > 1) {
-          const rows = invSheet.getRange(2, 1, invSheet.getLastRow() - 1, INVENTORY_HEADERS.length).getValues();
-          inventory = rows
-            .filter(r => r[0] !== '' && r[0] !== null)
-            .map(r => ({
-              assetTag: String(r[0] || ''),
-              serial  : String(r[1] || ''),
-              model   : String(r[2] || ''),
-              building: String(r[3] || ''),
-              status  : String(r[4] || ''),
-            }));
-        }
-
-        // Parse full inventory sheet
-        const allInvSheet = ss.getSheetByName(ALL_INVENTORY_SHEET);
-        let allInventory = [];
-        if (allInvSheet && allInvSheet.getLastRow() > 1) {
-          const rows = allInvSheet.getRange(2, 1, allInvSheet.getLastRow() - 1, ALL_INVENTORY_HEADERS.length).getValues();
-          allInventory = rows
-            .filter(r => r[0] !== '' && r[0] !== null)
-            .map(r => ({
-              assetTag: String(r[0] || ''),
-              serial  : String(r[1] || ''),
-              model   : String(r[2] || ''),
-              building: String(r[3] || ''),
-              owner   : String(r[4] || ''),
-              status  : String(r[5] || ''),
-            }));
-        }
-
-        // Parse parts sheet (col K = internal part ID)
-        const partsSheet = ss.getSheetByName(PARTS_SHEET);
-        let parts = [];
-        if (partsSheet && partsSheet.getLastRow() > 1) {
-          const rows = partsSheet.getRange(2, 1, partsSheet.getLastRow() - 1, PART_ID_COL).getValues();
-          parts = rows
-            .filter(r => r[2] !== 'TOTAL INVENTORY VALUE' && r[0] !== '' && r[0] !== null)
-            .map(r => ({
-              type  : String(r[0] || ''),
-              mfr   : String(r[1] || ''),
-              name  : String(r[2] || ''),
-              value : Number(r[3]) || 0,
-              stock : Number(r[4]) || 0,
-              fru   : String(r[5] || ''),
-              models: String(r[6] || ''),
-              vendor: String(r[7] || ''),
-              id    : String(r[10] || ''),
-            }));
-        }
-
-        return jsonResponse({
-          status      : 'ok',
-          checkouts   : checkouts,
-          inventory   : inventory,
-          allInventory: allInventory,
-          parts       : parts,
-        });
-      } catch(err) {
-        Logger.log('doGet getAll error: ' + err.message);
-        return jsonResponse({ status: 'error', message: err.message });
-      }
-    }
-
-    // All other actions
-    try {
-      const data = Object.assign({}, e.parameter);
-      if (data.devices && typeof data.devices === 'string') data.devices = JSON.parse(data.devices);
-      if (data.device  && typeof data.device  === 'string') data.device  = JSON.parse(data.device);
-      if (data.parts   && typeof data.parts   === 'string') data.parts   = JSON.parse(data.parts);
-      if (data.part    && typeof data.part    === 'string') data.part    = JSON.parse(data.part);
-      logRequest(data);
-      dispatch(data);
-      return jsonResponse({ status: 'ok', action });
-    } catch(err) {
-      Logger.log('doGet error: ' + err.message);
-      return jsonResponse({ status: 'error', message: err.message });
-    }
-  }
-
-  // Default: return raw checkouts array (legacy)
-  try {
-    const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = getOrCreateSheet(ss, CHECKOUT_SHEET);
-    return jsonResponse(sheet.getDataRange().getValues());
-  } catch(err) {
-    return jsonResponse({ status: 'error', message: err.message });
-  }
 }
 
 function dispatch(data) {

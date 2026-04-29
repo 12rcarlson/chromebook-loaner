@@ -534,6 +534,7 @@ function appendCheckout(d) {
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, CHECKOUT_SHEET);
   ensureHeaders(sheet, CHECKOUT_HEADERS);
+  if (findRowByKey(sheet, d.id, 1)) return;
   sheet.appendRow([
     d.id, d.studentName || '', d.grade || '', d.building || '',
     d.assetTag || '', d.serial || '', d.type || '', d.damagedPart || '',

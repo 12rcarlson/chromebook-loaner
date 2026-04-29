@@ -220,6 +220,12 @@
       font-family: inherit;
     }
 
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.62;
+      transform: none;
+    }
+
     .btn-primary {
       background: var(--primary);
       color: #fff;
@@ -974,7 +980,7 @@
           </div>
         </div>
         <div style="margin-top:1.25rem; display:flex; gap:8px;">
-          <button class="btn btn-primary" onclick="submitCheckout()">Save Checkout</button>
+          <button id="checkout-save-btn" class="btn btn-primary" type="button" onclick="submitCheckout()">Save Checkout</button>
           <button class="btn btn-secondary" onclick="clearCheckoutForm()">Clear</button>
         </div>
       </div>
@@ -1318,6 +1324,7 @@ let dashboardBuilding = '';
 
 // ── Repair parts staged for current checkout ─────────────────────────────────
 let stagedRepairParts = []; // [{partId, partName, qty}]
+let checkoutSubmitting = false;
 
 function getAuthToken() {
   return sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY) || '';
@@ -2058,7 +2065,18 @@ function commitRepairParts() {
 
 // ─── Checkout ─────────────────────────────────────────────────────────────────
 
+function setCheckoutSubmitting(isSubmitting) {
+  checkoutSubmitting = isSubmitting;
+  const btn = document.getElementById('checkout-save-btn');
+  if (!btn) return;
+  btn.disabled = isSubmitting;
+  btn.textContent = isSubmitting ? 'Saving...' : 'Save Checkout';
+}
+
 async function submitCheckout() {
+  if (checkoutSubmitting) return;
+  setCheckoutSubmitting(true);
+
   const name        = document.getElementById('co-student-name').value.trim();
   const grade       = document.getElementById('co-grade').value;
   const building    = document.getElementById('co-building').value;
@@ -2073,6 +2091,7 @@ async function submitCheckout() {
   const damaged     = damagedPart === 'Other' ? (damagedOther || 'Other') : damagedPart;
 
   if (!name || !asset || !type) {
+    setCheckoutSubmitting(false);
     showToast('Student name, asset tag, and type are required.', 'error');
     return;
   }
@@ -2095,11 +2114,22 @@ async function submitCheckout() {
   pushRecentStudent(name);
 
   save();
-  const checkoutSynced = await sendToSheet(record);
-  if (dev) await upsertDeviceToSheet(dev);
   clearCheckoutForm();
   refreshAll();
-  showToast(checkoutSynced === false ? 'Saved locally. Sheet sync failed.' : 'Checkout saved!', checkoutSynced === false ? 'error' : 'success');
+  showToast('Checkout saved. Syncing...', 'success');
+  setCheckoutSubmitting(false);
+
+  const syncs = [sendToSheet(record)];
+  if (dev) syncs.push(upsertDeviceToSheet(dev));
+  Promise.all(syncs).then((results) => {
+    const checkoutSynced = results[0];
+    showToast(checkoutSynced === false ? 'Saved locally. Sheet sync failed.' : 'Checkout saved!', checkoutSynced === false ? 'error' : 'success');
+  }).catch((err) => {
+    console.error('Checkout sync failed:', err);
+    showToast('Saved locally. Sheet sync failed.', 'error');
+  }).finally(() => {
+    setCheckoutSubmitting(false);
+  });
 }
 
 async function returnDevice(id) {
@@ -2470,7 +2500,7 @@ function exportAllInventoryCSV() {
 
 async function sendToSheet(record) {
   if (SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return true;
-  return sheetPost({ action: 'checkout', ...record });
+  return sheetPost({ action: 'checkout', ...record }, { retries: 0 });
 }
 
 async function sendReturnToSheet(record) {
@@ -2478,10 +2508,10 @@ async function sendReturnToSheet(record) {
   return sheetPost({ action: 'return', id: record.id, returnDate: record.returnDate || '' });
 }
 
-async function sheetPost(payload) {
+async function sheetPost(payload, options = {}) {
   if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return true;
   try {
-    await apiPost(payload);
+    await apiPost(payload, options);
     return true;
   } catch(e) {
     console.error('Sheet sync failed:', payload.action, e);

@@ -3324,7 +3324,7 @@ function clearCheckoutForm() {
   document.getElementById('co-grade').value    = '';
   document.getElementById('co-building').value = '';
   document.getElementById('co-type').value     = 'Forgot Device';
-  document.getElementById('co-due').value      = getTomorrow();
+  document.getElementById('co-due').value      = getCheckoutDefaultDueDate('Forgot Device');
   document.getElementById('co-damaged-part').value = '';
   document.getElementById('damaged-part-section').style.display = 'none';
   document.getElementById('other-text-group').style.display     = 'none';
@@ -3556,9 +3556,28 @@ function formatDueDate(val) {
   return d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric', timeZone:'America/Chicago' });
 }
 
+function formatDateInputValue(date) {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function getCheckoutDefaultDueDate(type) {
+  const d = new Date();
+  const daysToAdd = type === 'Forgot Device' && d.getDay() === 5 ? 3 : 1;
+  d.setDate(d.getDate() + daysToAdd);
+  return formatDateInputValue(d);
+}
+
 function getTomorrow() {
-  const d = new Date(); d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
+  return getCheckoutDefaultDueDate('');
+}
+
+function updateCheckoutDueDefault() {
+  const type = document.getElementById('co-type')?.value || 'Forgot Device';
+  const due = document.getElementById('co-due');
+  if (due) due.value = getCheckoutDefaultDueDate(type);
 }
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
@@ -3580,6 +3599,7 @@ function toggleDamagedPart() {
   const type    = document.getElementById('co-type').value;
   const section = document.getElementById('damaged-part-section');
   section.style.display = type === 'Needs Repair' ? 'block' : 'none';
+  updateCheckoutDueDefault();
   if (type !== 'Needs Repair') {
     document.getElementById('co-damaged-part').value  = '';
     document.getElementById('co-damaged-other').value = '';
@@ -3593,7 +3613,7 @@ function toggleOtherText() {
   document.getElementById('other-text-group').style.display = val === 'Other' ? 'block' : 'none';
 }
 
-document.getElementById('co-due').value = getTomorrow();
+updateCheckoutDueDefault();
 
 // ─── Parts Inventory ──────────────────────────────────────────────────────────
 

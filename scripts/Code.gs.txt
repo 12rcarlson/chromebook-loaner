@@ -62,8 +62,8 @@ const AUTH_TOKEN_SECONDS = 30 * 24 * 60 * 60;
 const MAX_BULK_ROWS = 6000;
 const ALLOWED_INCIDENT_TYPES = ['Forgot Device', 'Needs Repair', 'Lost', 'Daily Loaner'];
 const ALLOWED_CHECKOUT_STATUSES = ['Active', 'Returned'];
-const ALLOWED_LOANER_STATUSES = ['Available', 'On Loan', 'Loaner', 'Daily Loaner', 'Needs Repair'];
-const ALLOWED_ALL_INVENTORY_STATUSES = ['Assigned', 'Unassigned', 'Loaner', 'Daily Loaner', 'Needs Repair', 'Forgot Device'];
+const ALLOWED_LOANER_STATUSES = ['Available', 'On Loan', 'Loaner', 'Daily Loaner', 'Needs Repair', 'Retired'];
+const ALLOWED_ALL_INVENTORY_STATUSES = ['Assigned', 'Unassigned', 'Loaner', 'Daily Loaner', 'Needs Repair', 'Forgot Device', 'Retired'];
 const ALLOWED_BUILDINGS = [
   '',
   'Bureau Valley High School',
@@ -162,6 +162,10 @@ function cleanText_(value, maxLen) {
   return text.slice(0, maxLen || 250);
 }
 
+function normalizeDeviceStatus_(status) {
+  return status === 'Decommissioned' ? 'Retired' : status;
+}
+
 function assertAllowed_(value, allowed, field) {
   if (allowed.indexOf(String(value || '')) === -1) throw new Error('Invalid ' + field + ': ' + value);
 }
@@ -202,7 +206,7 @@ function validateLoanerDevice_(d) {
     serial  : cleanText_(d.serial, 120),
     model   : cleanText_(d.model, 160),
     building: cleanText_(d.building, 120),
-    status  : cleanText_(d.status || 'Available', 40),
+    status  : normalizeDeviceStatus_(cleanText_(d.status || 'Available', 40)),
   };
   if (!device.assetTag) throw new Error('Asset tag is required.');
   assertAllowed_(device.status, ALLOWED_LOANER_STATUSES, 'loaner status');
@@ -218,7 +222,7 @@ function validateAllInventoryDevice_(d) {
     model   : cleanText_(d.model, 160),
     building: cleanText_(d.building, 120),
     owner   : cleanText_(d.owner, 160),
-    status  : cleanText_(d.status || 'Unassigned', 40),
+    status  : normalizeDeviceStatus_(cleanText_(d.status || 'Unassigned', 40)),
   };
   if (!device.assetTag) throw new Error('Asset tag is required.');
   assertAllowed_(device.status, ALLOWED_ALL_INVENTORY_STATUSES, 'inventory status');
@@ -613,6 +617,7 @@ function inventoryStatusColor(status) {
     case 'Loaner':       return '#e6f1fb';
     case 'Daily Loaner': return '#e6f1fb';
     case 'Needs Repair': return '#fcebeb';
+    case 'Retired':      return '#d8d4ca';
     default:             return '#f1efe8';
   }
 }
@@ -656,6 +661,7 @@ function allInventoryStatusColor(status) {
     case 'Loaner':       return '#faeeda';
     case 'Daily Loaner': return '#faeeda';
     case 'Needs Repair': return '#fcebeb';
+    case 'Retired':      return '#d8d4ca';
     default:             return '#f1efe8';
   }
 }

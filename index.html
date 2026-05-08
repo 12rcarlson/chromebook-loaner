@@ -337,6 +337,33 @@
 
     .actions { display: flex; gap: 6px; }
 
+    .upgrade-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+    }
+
+    .upgrade-item {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      background: var(--bg);
+    }
+
+    .upgrade-item h3 {
+      font-size: 15px;
+      font-weight: 700;
+      margin: 0 0 6px;
+      color: var(--text);
+    }
+
+    .upgrade-item p {
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--text-muted);
+      margin: 0;
+    }
+
     .search-bar {
       display: flex;
       gap: 10px;
@@ -805,6 +832,7 @@
   <button onclick="showPage('loaners')">Loaners</button>
   <button onclick="showPage('inventory')">Inventory</button>
   <button onclick="showPage('parts')">Parts Inventory</button>
+  <button onclick="showPage('upgrades')">Upgrade Backlog</button>
 </nav>
 
 <main>
@@ -838,6 +866,8 @@
       <button class="bfb-btn" data-building="Bureau Valley Elementary and Junior High" onclick="setDashboardBuilding(this)">BVJHE</button>
       <button class="bfb-btn" data-building="Bureau Valley Elementary-Wyanet" onclick="setDashboardBuilding(this)">BVW</button>
       <button class="bfb-btn" data-building="Bureau Valley North" onclick="setDashboardBuilding(this)">BVN</button>
+      <span class="bfb-label">School year:</span>
+      <select id="school-year-filter" onchange="setSchoolYearFilter(this.value)" style="width:150px;"></select>
     </div>
 
     <div class="two-col">
@@ -1022,6 +1052,7 @@
         <option>Bureau Valley Elementary-Wyanet</option>
         <option>Bureau Valley North</option>
       </select>
+      <select id="incident-school-year-filter" onchange="setSchoolYearFilter(this.value)" style="width:150px;"></select>
       <button class="btn btn-secondary" onclick="exportCSV()">⬇ Export CSV</button>
       <button class="btn btn-primary" onclick="document.getElementById('incident-csv-input').click()">⬆ Import CSV</button>
       <input type="file" id="incident-csv-input" accept=".csv" style="display:none" onchange="importIncidentsCSV(event)" />
@@ -1062,6 +1093,7 @@
         <option>Loaner</option>
         <option>Daily Loaner</option>
         <option>Needs Repair</option>
+        <option>Retired</option>
       </select>
       <button class="btn btn-secondary" onclick="openAddDevice()">+ Add Device</button>
       <button class="btn btn-secondary" onclick="exportLoanersCSV()">⬇ Export CSV</button>
@@ -1133,6 +1165,7 @@
         <option>Daily Loaner</option>
         <option>Needs Repair</option>
         <option>Forgot Device</option>
+        <option>Retired</option>
       </select>
       <select id="all-inv-building-filter" onchange="renderAllInventory()" style="width:200px;">
         <option value="">All Buildings</option>
@@ -1296,6 +1329,60 @@
     </div>
   </div>
 
+  <!-- UPGRADE BACKLOG -->
+  <div id="page-upgrades" class="page">
+    <h1 class="section-heading">Upgrade Backlog</h1>
+    <div class="card">
+      <div class="card-header">
+        <h2>Possible Next Upgrades</h2>
+      </div>
+      <div class="card-body">
+        <div class="upgrade-grid">
+          <div class="upgrade-item">
+            <h3>1. Retired Device Lifecycle</h3>
+            <p>Add Retired status, Retire and Restore actions, retired-date tracking, and checkout blocking for retired devices.</p>
+          </div>
+          <div class="upgrade-item">
+            <h3>2. School-Year Views</h3>
+            <p>Filter dashboard, incident, and export data by school year, using July 1 through June 30 boundaries.</p>
+          </div>
+          <div class="upgrade-item">
+            <h3>3. Year-End Report</h3>
+            <p>Create a printable or exportable school-year summary with total checkouts, repairs, lost devices, repeat students, and building totals.</p>
+          </div>
+          <div class="upgrade-item">
+            <h3>4. Device History</h3>
+            <p>Click an asset tag to view every checkout, return, repair, lost event, and retirement tied to that device.</p>
+          </div>
+          <div class="upgrade-item">
+            <h3>5. Student History</h3>
+            <p>Click a student name to review repeated loaners, forgotten-device patterns, repairs, and unresolved incidents.</p>
+          </div>
+          <div class="upgrade-item">
+            <h3>6. Overdue Tracking</h3>
+            <p>Add a focused overdue list with days out, building, student, device, and quick return actions.</p>
+          </div>
+          <div class="upgrade-item">
+            <h3>7. Retirement Notes</h3>
+            <p>Prompt for a retirement reason such as broken, obsolete, missing, recycled, sold, or parts-only.</p>
+          </div>
+          <div class="upgrade-item">
+            <h3>8. Bulk Actions</h3>
+            <p>Select multiple devices and mark them Retired, Available, Needs Repair, or export only the selected rows.</p>
+          </div>
+          <div class="upgrade-item">
+            <h3>9. Import Review</h3>
+            <p>Preview import counts before writing to Sheets: new devices, duplicates, retired/decommissioned, skipped rows, and status changes.</p>
+          </div>
+          <div class="upgrade-item">
+            <h3>10. Building-Level Dashboard</h3>
+            <p>Show active loaners, available loaners, retired devices, repair incidents, and overdue returns by building.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </main>
 
 <div class="toast" id="toast"></div>
@@ -1321,6 +1408,8 @@ let incidentSortDir = 'desc'; // 'asc' | 'desc'
 
 // ── Dashboard building filter ─────────────────────────────────────────────────
 let dashboardBuilding = '';
+let selectedSchoolYear = '';
+const SCHOOL_YEAR_START_MONTH = 6; // July, zero-based month index.
 
 // ── Repair parts staged for current checkout ─────────────────────────────────
 let stagedRepairParts = []; // [{partId, partName, qty}]
@@ -1597,12 +1686,13 @@ function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
-  const tabs = ['dashboard','checkout','incidents','loaners','inventory','parts'];
+  const tabs = ['dashboard','checkout','incidents','loaners','inventory','parts','upgrades'];
   document.querySelectorAll('nav button')[tabs.indexOf(name)].classList.add('active');
   refreshAll();
 }
 
 function refreshAll() {
+  updateSchoolYearFilters();
   renderStats();
   renderDashboard();
   renderIncidents();
@@ -1613,6 +1703,56 @@ function refreshAll() {
   renderParts();
   renderRecentStudents();
   populateRepairPartsSelect();
+}
+
+function getSchoolYearValue(dateValue) {
+  const d = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (isNaN(d.getTime())) return '';
+  const year = d.getFullYear();
+  const startYear = d.getMonth() >= SCHOOL_YEAR_START_MONTH ? year : year - 1;
+  return `${startYear}-${startYear + 1}`;
+}
+
+function schoolYearLabel(value) {
+  const startYear = Number(String(value).split('-')[0]);
+  if (!startYear) return 'Unknown';
+  return `${startYear}/${String(startYear + 1).slice(-2)}`;
+}
+
+function getSchoolYearOptions() {
+  const years = new Set([getSchoolYearValue(new Date())]);
+  checkouts.forEach(c => {
+    const year = getSchoolYearValue(c.date);
+    if (year) years.add(year);
+  });
+  return Array.from(years).filter(Boolean).sort().reverse();
+}
+
+function updateSchoolYearFilters() {
+  const options = getSchoolYearOptions();
+  if (selectedSchoolYear && !options.includes(selectedSchoolYear)) selectedSchoolYear = '';
+  const html = ['<option value="">All School Years</option>']
+    .concat(options.map(year => `<option value="${year}">${schoolYearLabel(year)}</option>`))
+    .join('');
+  ['school-year-filter','incident-school-year-filter'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el.innerHTML !== html) el.innerHTML = html;
+    el.value = selectedSchoolYear;
+  });
+}
+
+function setSchoolYearFilter(value) {
+  selectedSchoolYear = value || '';
+  refreshAll();
+}
+
+function matchesSelectedSchoolYear(checkout) {
+  return !selectedSchoolYear || getSchoolYearValue(checkout.date) === selectedSchoolYear;
+}
+
+function getSchoolYearCheckouts() {
+  return selectedSchoolYear ? checkouts.filter(matchesSelectedSchoolYear) : checkouts;
 }
 
 // ─── Badge helpers ────────────────────────────────────────────────────────────
@@ -1658,9 +1798,10 @@ function daysOutBadge(checkout) {
 // ─── Stats ────────────────────────────────────────────────────────────────────
 
 function renderStats() {
-  const active = checkouts.filter(c => c.status === 'Active').length;
-  const forgot = checkouts.filter(c => c.status === 'Active' && c.type === 'Forgot Device').length;
-  const repair = checkouts.filter(c => c.status === 'Active' && c.type === 'Needs Repair').length;
+  const yearCheckouts = getSchoolYearCheckouts();
+  const active = yearCheckouts.filter(c => c.status === 'Active').length;
+  const forgot = yearCheckouts.filter(c => c.status === 'Active' && c.type === 'Forgot Device').length;
+  const repair = yearCheckouts.filter(c => c.status === 'Active' && c.type === 'Needs Repair').length;
   const avail  = inventory.filter(d => d.status === 'Available' || d.status === 'Loaner' || d.status === 'Daily Loaner').length;
   document.getElementById('stat-active').textContent    = active;
   document.getElementById('stat-forgot').textContent    = forgot;
@@ -1682,7 +1823,7 @@ function setDashboardBuilding(btn) {
 function renderDashboard() {
   const tbody = document.getElementById('dashboard-tbody');
   if (!tbody) return;
-  let active = checkouts.filter(c => c.status === 'Active');
+  let active = getSchoolYearCheckouts().filter(c => c.status === 'Active');
   if (dashboardBuilding) active = active.filter(c => c.building === dashboardBuilding);
   active = active.slice(-10).reverse();
 
@@ -1703,7 +1844,7 @@ function renderDashboard() {
 function renderIncidentSummary() {
   const tbody = document.getElementById('incident-summary-tbody');
   if (!tbody) return;
-  const recent = [...checkouts].reverse().slice(0, 8);
+  const recent = [...getSchoolYearCheckouts()].reverse().slice(0, 8);
   if (!recent.length) {
     tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted)">No incidents</td></tr>`;
     return;
@@ -1741,7 +1882,7 @@ function renderIncidents() {
   const tbody     = document.getElementById('incident-tbody');
   if (!tbody) return;
 
-  let rows = [...checkouts].filter(c => {
+  let rows = [...getSchoolYearCheckouts()].filter(c => {
     const matchText     = !search || [c.studentName, c.assetTag, c.serial, c.studentId].some(v => v && v.toLowerCase().includes(search));
     const matchType     = !filter || c.type === filter;
     const matchStatus   = !statusF || c.status === statusF;
@@ -1810,6 +1951,22 @@ function loanerStatusBadge(s) {
   return `<span class="badge ${cls}">${escapeHtml(s)}</span>`;
 }
 
+function loanerLifecycleButton(d) {
+  const tag = jsStringAttr(d.assetTag);
+  if (d.status === 'Retired') {
+    return `<button class="btn btn-secondary btn-sm" onclick="restoreLoanerDevice('${tag}')">Restore</button>`;
+  }
+  return `<button class="btn btn-secondary btn-sm" onclick="retireLoanerDevice('${tag}')">Retire</button>`;
+}
+
+function allInventoryLifecycleButton(d) {
+  const tag = jsStringAttr(d.assetTag);
+  if (d.status === 'Retired') {
+    return `<button class="btn btn-secondary btn-sm" onclick="restoreAllInvDevice('${tag}')">Restore</button>`;
+  }
+  return `<button class="btn btn-secondary btn-sm" onclick="retireAllInvDevice('${tag}')">Retire</button>`;
+}
+
 function renderLoaners() {
   const search = (document.getElementById('inv-search')?.value || '').toLowerCase();
   const filter = document.getElementById('inv-status-filter')?.value || '';
@@ -1841,7 +1998,7 @@ function renderLoaners() {
       <td class="editable" data-store="loaner" data-field="status" data-key="${escapeHtml(d.assetTag)}" data-type="select" data-options="status-loaner" onclick="startCellEdit(this)">
         ${loanerStatusBadge(d.status)}<span class="edit-hint">✎</span>
       </td>
-      <td><button class="btn btn-danger btn-sm" onclick="removeDevice('${jsStringAttr(d.assetTag)}')">Remove</button></td>
+      <td><div class="actions">${loanerLifecycleButton(d)}<button class="btn btn-danger btn-sm" onclick="removeDevice('${jsStringAttr(d.assetTag)}')">Remove</button></div></td>
     </tr>`).join('');
 
   if (rows.length > 200) {
@@ -1896,7 +2053,7 @@ function renderAllInventory() {
       <td class="editable" data-store="all" data-field="status" data-key="${escapeHtml(d.assetTag)}" data-type="select" data-options="status-all" onclick="startCellEdit(this)">
         <span class="badge ${statusCls}">${escapeHtml(d.status)}</span><span class="edit-hint">✎</span>
       </td>
-      <td><button class="btn btn-danger btn-sm" onclick="removeAllInvDevice('${jsStringAttr(d.assetTag)}')">Delete</button></td>
+      <td><div class="actions">${allInventoryLifecycleButton(d)}<button class="btn btn-danger btn-sm" onclick="removeAllInvDevice('${jsStringAttr(d.assetTag)}')">Delete</button></div></td>
     </tr>`;
   }).join('');
 
@@ -2096,6 +2253,13 @@ async function submitCheckout() {
     return;
   }
 
+  const dev = inventory.find(d => d.assetTag === asset);
+  if (dev && dev.status === 'Retired') {
+    setCheckoutSubmitting(false);
+    showToast('That device is retired. Restore it before checking it out.', 'error');
+    return;
+  }
+
   const today = new Date().toString();
   const record = {
     id: nextId++, studentName: name, grade, building, assetTag: asset, serial,
@@ -2104,7 +2268,6 @@ async function submitCheckout() {
 
   checkouts.push(record);
 
-  const dev = inventory.find(d => d.assetTag === asset);
   if (dev) dev.status = 'On Loan';
 
   // Commit staged repair parts if any
@@ -2173,6 +2336,26 @@ function addDevice() {
   showToast('Device added!', 'success');
 }
 
+function setLoanerDeviceStatus(tag, status, message) {
+  const dev = inventory.find(d => d.assetTag === tag);
+  if (!dev) return;
+  dev.status = status;
+  save(); refreshAll();
+  upsertDeviceToSheet(dev);
+  showToast(message, 'success');
+}
+
+function retireLoanerDevice(tag) {
+  const dev = inventory.find(d => d.assetTag === tag);
+  if (!dev) return;
+  if (dev.status === 'On Loan' && !confirm('This device is currently marked On Loan. Retire it anyway?')) return;
+  setLoanerDeviceStatus(tag, 'Retired', 'Device retired.');
+}
+
+function restoreLoanerDevice(tag) {
+  setLoanerDeviceStatus(tag, 'Available', 'Device restored to available.');
+}
+
 function removeDevice(tag) {
   if (!confirm('Remove device ' + tag + '?')) return;
   inventory = inventory.filter(d => d.assetTag !== tag);
@@ -2224,14 +2407,14 @@ function importFromCSV(event, target) {
       }
       function col(cols, i) { return (i !== -1 && cols[i] !== undefined) ? cols[i].trim() : ''; }
 
-      let added = 0, skipped = 0, dupes = 0;
+      let added = 0, skipped = 0, dupes = 0, retired = 0;
       const dataStore = target === 'loaner' ? inventory : allInventory;
       const existing  = new Set(dataStore.map(d => d.assetTag));
 
       for (let i = 1; i < lines.length; i++) {
         const cols   = parseRow(lines[i]);
-        const status = col(cols, idx.status);
-        if (status === 'Decommissioned') { skipped++; continue; }
+        let status = col(cols, idx.status);
+        if (status === 'Decommissioned') { status = 'Retired'; retired++; }
         const assetTag = col(cols, idx.assetTag);
         if (!assetTag) { skipped++; continue; }
         if (existing.has(assetTag)) { dupes++; continue; }
@@ -2253,7 +2436,7 @@ function importFromCSV(event, target) {
       save(); refreshAll();
       if (target === 'loaner') syncInventoryToSheet();
       else syncAllInventoryToSheet();
-      showBanner(target, `✓ Imported ${added.toLocaleString()} devices.${dupes ? ' ' + dupes + ' duplicates skipped.' : ''}${skipped ? ' ' + skipped + ' decommissioned skipped.' : ''} Syncing to Sheet...`, 'success');
+      showBanner(target, `✓ Imported ${added.toLocaleString()} devices.${retired ? ' ' + retired + ' marked retired.' : ''}${dupes ? ' ' + dupes + ' duplicates skipped.' : ''}${skipped ? ' ' + skipped + ' blank rows skipped.' : ''} Syncing to Sheet...`, 'success');
     } catch(err) {
       showBanner(target, 'Import failed: ' + err.message, 'error');
     }
@@ -2423,6 +2606,23 @@ function removeAllInvDevice(tag) {
   showToast('Device deleted.');
 }
 
+function setAllInvDeviceStatus(tag, status, message) {
+  const dev = allInventory.find(d => d.assetTag === tag);
+  if (!dev) return;
+  dev.status = status;
+  save(); refreshAll();
+  upsertAllDeviceToSheet(dev);
+  showToast(message, 'success');
+}
+
+function retireAllInvDevice(tag) {
+  setAllInvDeviceStatus(tag, 'Retired', 'Device retired.');
+}
+
+function restoreAllInvDevice(tag) {
+  setAllInvDeviceStatus(tag, 'Unassigned', 'Device restored to unassigned.');
+}
+
 function clearAllInventory() {
   const search   = (document.getElementById('all-inv-search')?.value || '').toLowerCase();
   const filter   = document.getElementById('all-inv-status-filter')?.value || '';
@@ -2468,11 +2668,12 @@ function clearCheckoutForm() {
 
 function exportCSV() {
   const headers = ['ID','Student Name','Grade','Building','Asset Tag','Serial','Type','Damaged Part','Date','Due Back','Status','Notes'];
-  const rows    = checkouts.map(c => [c.id, c.studentName, c.grade||'', c.building||'', c.assetTag, c.serial||'', c.type, c.damagedPart||'', c.date, c.due||'', c.status, c.notes||'']);
+  const exportRows = getSchoolYearCheckouts();
+  const rows    = exportRows.map(c => [c.id, c.studentName, c.grade||'', c.building||'', c.assetTag, c.serial||'', c.type, c.damagedPart||'', c.date, c.due||'', c.status, c.notes||'']);
   const csv     = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-  a.download = 'loaner-records-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.download = 'loaner-records-' + (selectedSchoolYear ? schoolYearLabel(selectedSchoolYear).replace('/', '-') + '-' : '') + new Date().toISOString().slice(0,10) + '.csv';
   a.click(); showToast('CSV exported!', 'success');
 }
 
@@ -2536,8 +2737,8 @@ async function syncPartsToSheet()                { await sheetPost({ action: 'sy
 const CELL_OPTIONS = {
   'building-loaner': ['Bureau Valley High School','Bureau Valley Elementary and Junior High','Bureau Valley Elementary-Wyanet','Bureau Valley North'],
   'building-all':    ['Bureau Valley High School','Bureau Valley Elementary and Junior High','Bureau Valley Elementary-Wyanet','Bureau Valley North'],
-  'status-loaner':   ['Available','On Loan','Loaner','Daily Loaner','Needs Repair'],
-  'status-all':      ['Assigned','Unassigned','Loaner','Daily Loaner','Needs Repair','Forgot Device'],
+  'status-loaner':   ['Available','On Loan','Loaner','Daily Loaner','Needs Repair','Retired'],
+  'status-all':      ['Assigned','Unassigned','Loaner','Daily Loaner','Needs Repair','Forgot Device','Retired'],
 };
 
 function startCellEdit(td, store, field, assetTag, inputType, options) {

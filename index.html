@@ -337,6 +337,86 @@
 
     .actions { display: flex; gap: 6px; }
 
+    .link-btn {
+      background: none;
+      border: none;
+      color: var(--primary);
+      cursor: pointer;
+      font: inherit;
+      font-weight: 600;
+      padding: 0;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 3000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(0,0,0,0.4);
+    }
+
+    .modal-backdrop.active { display: flex; }
+
+    .modal-panel {
+      width: min(880px, 100%);
+      max-height: 88vh;
+      overflow: auto;
+      background: var(--bg);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.25);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .modal-body { padding: 18px; }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .detail-box {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: var(--bg-surface);
+    }
+
+    .detail-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 4px;
+    }
+
+    .detail-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      overflow-wrap: anywhere;
+    }
+
     .upgrade-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -829,6 +909,8 @@
   <button class="active" onclick="showPage('dashboard')">Dashboard</button>
   <button onclick="showPage('checkout')">Check Out</button>
   <button onclick="showPage('incidents')">Incidents</button>
+  <button onclick="showPage('overdue')">Overdue</button>
+  <button onclick="showPage('reports')">Reports</button>
   <button onclick="showPage('loaners')">Loaners</button>
   <button onclick="showPage('inventory')">Inventory</button>
   <button onclick="showPage('parts')">Parts Inventory</button>
@@ -1081,6 +1163,92 @@
     </div>
   </div>
 
+  <!-- OVERDUE -->
+  <div id="page-overdue" class="page">
+    <h1 class="section-heading">Overdue Loaners</h1>
+    <div class="search-bar">
+      <input type="text" id="overdue-search" placeholder="Search student, asset tag, serial, or building..." oninput="renderOverdue()" />
+      <select id="overdue-building-filter" onchange="renderOverdue()" style="width:200px;">
+        <option value="">All Buildings</option>
+        <option>Bureau Valley High School</option>
+        <option>Bureau Valley Elementary and Junior High</option>
+        <option>Bureau Valley Elementary-Wyanet</option>
+        <option>Bureau Valley North</option>
+      </select>
+    </div>
+    <div class="card">
+      <div style="padding:10px 14px; background:var(--bg-surface); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+        <span style="font-size:13px; color:var(--text-muted);" id="overdue-count">0 overdue</span>
+        <button class="btn btn-secondary btn-sm" onclick="exportOverdueCSV()">Export CSV</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Asset Tag</th>
+            <th>Serial</th>
+            <th>Building</th>
+            <th>Due Back</th>
+            <th>Overdue</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="overdue-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- REPORTS -->
+  <div id="page-reports" class="page">
+    <h1 class="section-heading">Reports</h1>
+    <div class="search-bar">
+      <select id="report-school-year-filter" onchange="setSchoolYearFilter(this.value)" style="width:170px;"></select>
+      <button class="btn btn-secondary" onclick="exportYearEndReportCSV()">Export Report CSV</button>
+    </div>
+    <div class="stats-bar" style="grid-template-columns: repeat(4,1fr); margin-bottom:1.5rem;">
+      <div class="stat-card blue">
+        <div class="label">Total Checkouts</div>
+        <div class="value" id="report-total">0</div>
+      </div>
+      <div class="stat-card amber">
+        <div class="label">Forgot Device</div>
+        <div class="value" id="report-forgot">0</div>
+      </div>
+      <div class="stat-card red">
+        <div class="label">Repairs / Lost</div>
+        <div class="value" id="report-repair-lost">0</div>
+      </div>
+      <div class="stat-card green">
+        <div class="label">Retired Devices</div>
+        <div class="value" id="report-retired">0</div>
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-header">
+          <h2>Building Totals</h2>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Building</th><th>Checkouts</th><th>Active</th><th>Overdue</th><th>Available</th><th>Retired</th></tr>
+          </thead>
+          <tbody id="report-building-tbody"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <h2>Top Repeat Students</h2>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Student</th><th>Checkouts</th><th>Primary Building</th></tr>
+          </thead>
+          <tbody id="report-students-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- LOANERS -->
   <div id="page-loaners" class="page">
     <h1 class="section-heading">Loaner Devices</h1>
@@ -1103,6 +1271,19 @@
     <div id="loaner-import-status" style="display:none; margin-bottom:1rem; padding:12px 16px; border-radius:8px; font-size:14px; background:var(--accent-light); color:#085041; border:1px solid #9fe1cb;">
       <span id="loaner-import-text"></span>
     </div>
+    <div class="search-bar" style="align-items:center;">
+      <span style="font-size:13px;color:var(--text-muted);" id="loaner-bulk-count">0 selected</span>
+      <button class="btn btn-secondary btn-sm" onclick="selectVisibleLoaners()">Select Visible</button>
+      <button class="btn btn-secondary btn-sm" onclick="clearLoanerSelection()">Clear Selection</button>
+      <select id="loaner-bulk-status" style="width:150px;">
+        <option value="">Set status...</option>
+        <option>Available</option>
+        <option>Needs Repair</option>
+        <option>Retired</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="applyBulkLoanerStatus()">Apply</button>
+      <button class="btn btn-secondary btn-sm" onclick="exportSelectedLoanersCSV()">Export Selected</button>
+    </div>
     <div class="card">
       <div style="padding:10px 14px; background:var(--bg-surface); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
         <span style="font-size:13px; color:var(--text-muted);" id="inv-count">0 devices</span>
@@ -1110,7 +1291,7 @@
       </div>
       <table>
         <thead>
-          <tr><th>Asset Tag ✎</th><th>Model ✎</th><th>Serial ✎</th><th>Building ✎</th><th>Status ✎</th><th>Actions</th></tr>
+          <tr><th></th><th>Asset Tag ✎</th><th>Model ✎</th><th>Serial ✎</th><th>Building ✎</th><th>Status ✎</th><th>Actions</th></tr>
         </thead>
         <tbody id="inventory-tbody"></tbody>
       </table>
@@ -1181,6 +1362,19 @@
     <div id="all-inv-import-status" style="display:none; margin-bottom:1rem; padding:12px 16px; border-radius:8px; font-size:14px; background:var(--accent-light); color:#085041; border:1px solid #9fe1cb;">
       <span id="all-inv-import-text"></span>
     </div>
+    <div class="search-bar" style="align-items:center;">
+      <span style="font-size:13px;color:var(--text-muted);" id="all-inv-bulk-count">0 selected</span>
+      <button class="btn btn-secondary btn-sm" onclick="selectVisibleAllInventory()">Select Visible</button>
+      <button class="btn btn-secondary btn-sm" onclick="clearAllInventorySelection()">Clear Selection</button>
+      <select id="all-inv-bulk-status" style="width:150px;">
+        <option value="">Set status...</option>
+        <option>Unassigned</option>
+        <option>Needs Repair</option>
+        <option>Retired</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="applyBulkAllInventoryStatus()">Apply</button>
+      <button class="btn btn-secondary btn-sm" onclick="exportSelectedAllInventoryCSV()">Export Selected</button>
+    </div>
     <div class="card">
       <div style="padding:10px 14px; background:var(--bg-surface); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
         <span style="font-size:13px; color:var(--text-muted);" id="all-inv-count">0 devices</span>
@@ -1188,7 +1382,7 @@
       </div>
       <table>
         <thead>
-          <tr><th>Asset Tag ✎</th><th>Model ✎</th><th>Serial ✎</th><th>Building ✎</th><th>Assigned To ✎</th><th>Status ✎</th><th></th></tr>
+          <tr><th></th><th>Asset Tag ✎</th><th>Model ✎</th><th>Serial ✎</th><th>Building ✎</th><th>Assigned To ✎</th><th>Status ✎</th><th></th></tr>
         </thead>
         <tbody id="all-inventory-tbody"></tbody>
       </table>
@@ -1340,43 +1534,43 @@
         <div class="upgrade-grid">
           <div class="upgrade-item">
             <h3>1. Retired Device Lifecycle</h3>
-            <p>Add Retired status, Retire and Restore actions, retired-date tracking, and checkout blocking for retired devices.</p>
+            <p>Implemented: Retired status, Retire and Restore actions, retired-date tracking, and checkout blocking for retired devices.</p>
           </div>
           <div class="upgrade-item">
             <h3>2. School-Year Views</h3>
-            <p>Filter dashboard, incident, and export data by school year, using July 1 through June 30 boundaries.</p>
+            <p>Implemented: filter dashboard, incident, report, and export data by school year, using July 1 through June 30 boundaries.</p>
           </div>
           <div class="upgrade-item">
             <h3>3. Year-End Report</h3>
-            <p>Create a printable or exportable school-year summary with total checkouts, repairs, lost devices, repeat students, and building totals.</p>
+            <p>Implemented: exportable school-year summary with total checkouts, repairs, lost devices, repeat students, and building totals.</p>
           </div>
           <div class="upgrade-item">
             <h3>4. Device History</h3>
-            <p>Click an asset tag to view every checkout, return, repair, lost event, and retirement tied to that device.</p>
+            <p>Implemented: click an asset tag to view every checkout, return, repair, lost event, and retirement tied to that device.</p>
           </div>
           <div class="upgrade-item">
             <h3>5. Student History</h3>
-            <p>Click a student name to review repeated loaners, forgotten-device patterns, repairs, and unresolved incidents.</p>
+            <p>Implemented: click a student name to review repeated loaners, forgotten-device patterns, repairs, and unresolved incidents.</p>
           </div>
           <div class="upgrade-item">
             <h3>6. Overdue Tracking</h3>
-            <p>Add a focused overdue list with days out, building, student, device, and quick return actions.</p>
+            <p>Implemented: focused overdue list with days out, building, student, device, quick return actions, and CSV export.</p>
           </div>
           <div class="upgrade-item">
             <h3>7. Retirement Notes</h3>
-            <p>Prompt for a retirement reason such as broken, obsolete, missing, recycled, sold, or parts-only.</p>
+            <p>Implemented: prompt for a retirement reason such as broken, obsolete, missing, recycled, sold, or parts-only.</p>
           </div>
           <div class="upgrade-item">
             <h3>8. Bulk Actions</h3>
-            <p>Select multiple devices and mark them Retired, Available, Needs Repair, or export only the selected rows.</p>
+            <p>Implemented: select multiple devices and mark them Retired, Available, Needs Repair, or export only the selected rows.</p>
           </div>
           <div class="upgrade-item">
             <h3>9. Import Review</h3>
-            <p>Preview import counts before writing to Sheets: new devices, duplicates, retired/decommissioned, skipped rows, and status changes.</p>
+            <p>Implemented: preview import counts before writing to Sheets, including new devices, duplicates, retired/decommissioned, skipped rows, and status changes.</p>
           </div>
           <div class="upgrade-item">
             <h3>10. Building-Level Dashboard</h3>
-            <p>Show active loaners, available loaners, retired devices, repair incidents, and overdue returns by building.</p>
+            <p>Implemented: active loaners, available loaners, retired devices, repair incidents, and overdue returns by building.</p>
           </div>
         </div>
       </div>
@@ -1384,6 +1578,19 @@
   </div>
 
 </main>
+
+<div id="device-history-modal" class="modal-backdrop" onclick="closeDeviceHistory(event)">
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="device-history-title" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="device-history-title">Device History</div>
+        <div id="device-history-subtitle" style="font-size:12px;color:var(--text-muted);margin-top:2px;"></div>
+      </div>
+      <button class="btn btn-secondary btn-sm" type="button" onclick="closeDeviceHistory()">Close</button>
+    </div>
+    <div class="modal-body" id="device-history-body"></div>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -1410,6 +1617,8 @@ let incidentSortDir = 'desc'; // 'asc' | 'desc'
 let dashboardBuilding = '';
 let selectedSchoolYear = '';
 const SCHOOL_YEAR_START_MONTH = 6; // July, zero-based month index.
+const selectedLoanerTags = new Set();
+const selectedAllInventoryTags = new Set();
 
 // ── Repair parts staged for current checkout ─────────────────────────────────
 let stagedRepairParts = []; // [{partId, partName, qty}]
@@ -1686,7 +1895,7 @@ function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
-  const tabs = ['dashboard','checkout','incidents','loaners','inventory','parts','upgrades'];
+  const tabs = ['dashboard','checkout','incidents','overdue','reports','loaners','inventory','parts','upgrades'];
   document.querySelectorAll('nav button')[tabs.indexOf(name)].classList.add('active');
   refreshAll();
 }
@@ -1696,6 +1905,8 @@ function refreshAll() {
   renderStats();
   renderDashboard();
   renderIncidents();
+  renderOverdue();
+  renderReports();
   renderLoaners();
   renderAllInventory();
   renderAvailable();
@@ -1734,7 +1945,7 @@ function updateSchoolYearFilters() {
   const html = ['<option value="">All School Years</option>']
     .concat(options.map(year => `<option value="${year}">${schoolYearLabel(year)}</option>`))
     .join('');
-  ['school-year-filter','incident-school-year-filter'].forEach(id => {
+  ['school-year-filter','incident-school-year-filter','report-school-year-filter'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     if (el.innerHTML !== html) el.innerHTML = html;
@@ -1753,6 +1964,16 @@ function matchesSelectedSchoolYear(checkout) {
 
 function getSchoolYearCheckouts() {
   return selectedSchoolYear ? checkouts.filter(matchesSelectedSchoolYear) : checkouts;
+}
+
+function deviceHistoryLink(assetTag, label) {
+  if (!assetTag) return '-';
+  return `<button class="link-btn" type="button" onclick="event.stopPropagation();openDeviceHistory('${jsStringAttr(assetTag)}')">${escapeHtml(label || assetTag)}</button>`;
+}
+
+function studentHistoryLink(studentName, label) {
+  if (!studentName) return '-';
+  return `<button class="link-btn" type="button" onclick="event.stopPropagation();openStudentHistory('${jsStringAttr(studentName)}')">${escapeHtml(label || studentName)}</button>`;
 }
 
 // ─── Badge helpers ────────────────────────────────────────────────────────────
@@ -1797,6 +2018,25 @@ function daysOutBadge(checkout) {
 
 // ─── Stats ────────────────────────────────────────────────────────────────────
 
+function parseDateOnly(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function overdueDays(checkout) {
+  if (checkout.status !== 'Active') return 0;
+  const due = parseDateOnly(checkout.due);
+  if (!due) return 0;
+  const today = parseDateOnly(new Date());
+  return Math.max(0, Math.floor((today - due) / 86400000));
+}
+
+function isOverdue(checkout) {
+  return overdueDays(checkout) > 0;
+}
+
 function renderStats() {
   const yearCheckouts = getSchoolYearCheckouts();
   const active = yearCheckouts.filter(c => c.status === 'Active').length;
@@ -1833,8 +2073,8 @@ function renderDashboard() {
   }
   tbody.innerHTML = active.map(c => `
     <tr>
-      <td>${escapeHtml(c.studentName)}<br><span style="font-size:11px;color:var(--text-muted)">${escapeHtml(c.building||'')}</span></td>
-      <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${escapeHtml(c.assetTag)}</code></td>
+      <td>${studentHistoryLink(c.studentName)}<br><span style="font-size:11px;color:var(--text-muted)">${escapeHtml(c.building||'')}</span></td>
+      <td>${deviceHistoryLink(c.assetTag)}</td>
       <td>${badgeHtml(c.type)}</td>
       <td style="font-size:13px;color:var(--text-muted)">${escapeHtml(formatDueDate(c.due) || '-')}</td>
       <td>${daysOutBadge(c)}</td>
@@ -1851,7 +2091,7 @@ function renderIncidentSummary() {
   }
   tbody.innerHTML = recent.map(c => `
     <tr>
-      <td style="font-size:13px">${escapeHtml(c.studentName)}</td>
+      <td style="font-size:13px">${studentHistoryLink(c.studentName)}</td>
       <td>${badgeHtml(c.type)}</td>
       <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(formatDate(c.date))}</td>
     </tr>`).join('');
@@ -1927,8 +2167,8 @@ function renderIncidents() {
   tbody.innerHTML = rows.map(c => `
     <tr>
       <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(c.id)}</td>
-      <td>${escapeHtml(c.studentName)}<br><span style="font-size:11px;color:var(--text-muted)">${escapeHtml(c.building||'')}</span></td>
-      <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 5px;border-radius:4px;">${escapeHtml(c.assetTag)}</code></td>
+      <td>${studentHistoryLink(c.studentName)}<br><span style="font-size:11px;color:var(--text-muted)">${escapeHtml(c.building||'')}</span></td>
+      <td>${deviceHistoryLink(c.assetTag)}</td>
       <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(c.serial||'-')}</td>
       <td>${badgeHtml(c.type)}</td>
       <td style="font-size:12px">${escapeHtml(formatDate(c.date))}</td>
@@ -1946,9 +2186,355 @@ function renderIncidents() {
 
 // ─── Loaners ──────────────────────────────────────────────────────────────────
 
+function getOverdueRows() {
+  const search = (document.getElementById('overdue-search')?.value || '').toLowerCase();
+  const building = document.getElementById('overdue-building-filter')?.value || '';
+  return getSchoolYearCheckouts()
+    .filter(isOverdue)
+    .filter(c => {
+      const matchText = !search || [c.studentName, c.assetTag, c.serial, c.building].some(v => v && v.toLowerCase().includes(search));
+      const matchBuilding = !building || c.building === building;
+      return matchText && matchBuilding;
+    })
+    .sort((a, b) => overdueDays(b) - overdueDays(a));
+}
+
+function renderOverdue() {
+  const tbody = document.getElementById('overdue-tbody');
+  const countEl = document.getElementById('overdue-count');
+  if (!tbody) return;
+  const rows = getOverdueRows();
+  if (countEl) countEl.textContent = `${rows.length.toLocaleString()} overdue`;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">No overdue loaners found</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(c => `
+    <tr>
+      <td>${studentHistoryLink(c.studentName)}<br><span style="font-size:11px;color:var(--text-muted)">${escapeHtml(c.type||'')}</span></td>
+      <td>${deviceHistoryLink(c.assetTag)}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(c.serial||'-')}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(c.building||'-')}</td>
+      <td style="font-size:12px">${escapeHtml(formatDueDate(c.due)||'-')}</td>
+      <td><span class="days-out-badge alert">${overdueDays(c)}d</span></td>
+      <td><div class="actions"><button class="btn btn-success btn-sm" onclick="returnDevice(${c.id})">Return</button></div></td>
+    </tr>`).join('');
+}
+
+function getBuildingNames() {
+  return ['Bureau Valley High School','Bureau Valley Elementary and Junior High','Bureau Valley Elementary-Wyanet','Bureau Valley North'];
+}
+
+function mostCommonValue(values) {
+  const counts = {};
+  values.filter(Boolean).forEach(v => counts[v] = (counts[v] || 0) + 1);
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+}
+
+function getReportRows() {
+  const yearCheckouts = getSchoolYearCheckouts();
+  const buildings = getBuildingNames();
+  return buildings.map(building => {
+    const checkoutRows = yearCheckouts.filter(c => c.building === building);
+    const loanerRows = inventory.filter(d => d.building === building);
+    const allRows = allInventory.filter(d => d.building === building);
+    return {
+      building,
+      checkouts: checkoutRows.length,
+      active: checkoutRows.filter(c => c.status === 'Active').length,
+      overdue: checkoutRows.filter(isOverdue).length,
+      available: loanerRows.filter(d => d.status === 'Available' || d.status === 'Loaner' || d.status === 'Daily Loaner').length,
+      retired: [...loanerRows, ...allRows].filter(d => d.status === 'Retired').length,
+    };
+  });
+}
+
+function getTopStudentRows(limit = 8) {
+  const grouped = {};
+  getSchoolYearCheckouts().forEach(c => {
+    const name = c.studentName || 'Unknown';
+    if (!grouped[name]) grouped[name] = { name, count: 0, buildings: [] };
+    grouped[name].count++;
+    grouped[name].buildings.push(c.building || '');
+  });
+  return Object.values(grouped)
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    .slice(0, limit)
+    .map(row => ({ ...row, building: mostCommonValue(row.buildings) }));
+}
+
+function renderReports() {
+  const rows = getSchoolYearCheckouts();
+  const retiredCount = [...inventory, ...allInventory].filter(d => d.status === 'Retired').length;
+  const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+  setText('report-total', rows.length.toLocaleString());
+  setText('report-forgot', rows.filter(c => c.type === 'Forgot Device').length.toLocaleString());
+  setText('report-repair-lost', rows.filter(c => c.type === 'Needs Repair' || c.type === 'Lost').length.toLocaleString());
+  setText('report-retired', retiredCount.toLocaleString());
+
+  const buildingTbody = document.getElementById('report-building-tbody');
+  if (buildingTbody) {
+    const buildingRows = getReportRows();
+    buildingTbody.innerHTML = buildingRows.map(r => `
+      <tr>
+        <td>${escapeHtml(r.building)}</td>
+        <td>${r.checkouts.toLocaleString()}</td>
+        <td>${r.active.toLocaleString()}</td>
+        <td>${r.overdue.toLocaleString()}</td>
+        <td>${r.available.toLocaleString()}</td>
+        <td>${r.retired.toLocaleString()}</td>
+      </tr>`).join('');
+  }
+
+  const studentTbody = document.getElementById('report-students-tbody');
+  if (studentTbody) {
+    const studentRows = getTopStudentRows();
+    studentTbody.innerHTML = studentRows.length
+      ? studentRows.map(r => `<tr><td>${studentHistoryLink(r.name)}</td><td>${r.count.toLocaleString()}</td><td style="font-size:12px;color:var(--text-muted)">${escapeHtml(r.building || '-')}</td></tr>`).join('')
+      : `<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted)">No checkout data for this school year</td></tr>`;
+  }
+}
+
+function getDeviceRecords(assetTag) {
+  return {
+    loaner: inventory.find(d => d.assetTag === assetTag) || null,
+    full: allInventory.find(d => d.assetTag === assetTag) || null,
+  };
+}
+
+function getDeviceStatusSummary(assetTag) {
+  const records = getDeviceRecords(assetTag);
+  return records.loaner || records.full || { assetTag };
+}
+
+function getDeviceHistoryRows(assetTag) {
+  return [...checkouts]
+    .filter(c => c.assetTag === assetTag || c.originalAssetTag === assetTag)
+    .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+}
+
+function openDeviceHistory(assetTag) {
+  const modal = document.getElementById('device-history-modal');
+  const title = document.getElementById('device-history-title');
+  const subtitle = document.getElementById('device-history-subtitle');
+  const body = document.getElementById('device-history-body');
+  if (!modal || !title || !body) return;
+
+  const device = getDeviceStatusSummary(assetTag);
+  const rows = getDeviceHistoryRows(assetTag);
+  const activeCount = rows.filter(c => c.status === 'Active').length;
+  const repairCount = rows.filter(c => c.type === 'Needs Repair' || c.originalAssetTag === assetTag).length;
+  const lastSeen = rows.length ? formatDate(rows[0].date) : 'No checkout records';
+
+  title.textContent = `Device ${assetTag}`;
+  if (subtitle) subtitle.textContent = `${device.model || 'Unknown model'}${device.building ? ' - ' + device.building : ''}`;
+
+  const retiredInfo = device.status === 'Retired'
+    ? `<div class="detail-box"><div class="detail-label">Retired</div><div class="detail-value">${escapeHtml(formatDueDate(device.retiredDate) || '-')}<br><span style="font-weight:400;color:var(--text-muted);">${escapeHtml(device.retirementReason || 'No reason saved')}</span></div></div>`
+    : '';
+
+  body.innerHTML = `
+    <div class="detail-grid">
+      <div class="detail-box"><div class="detail-label">Status</div><div class="detail-value">${escapeHtml(device.status || '-')}</div></div>
+      <div class="detail-box"><div class="detail-label">Serial</div><div class="detail-value">${escapeHtml(device.serial || '-')}</div></div>
+      <div class="detail-box"><div class="detail-label">Checkouts</div><div class="detail-value">${rows.length}</div></div>
+      <div class="detail-box"><div class="detail-label">Active</div><div class="detail-value">${activeCount}</div></div>
+      <div class="detail-box"><div class="detail-label">Repair Events</div><div class="detail-value">${repairCount}</div></div>
+      <div class="detail-box"><div class="detail-label">Last Seen</div><div class="detail-value">${escapeHtml(lastSeen)}</div></div>
+      ${retiredInfo}
+    </div>
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Student</th><th>Type</th><th>Status</th><th>Due</th><th>Return</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        ${rows.length ? rows.map(c => `
+          <tr>
+            <td style="font-size:12px">${escapeHtml(formatDate(c.date))}</td>
+            <td>${escapeHtml(c.studentName || '-')}<br><span style="font-size:11px;color:var(--text-muted);">${escapeHtml(c.building || '')}</span></td>
+            <td>${badgeHtml(c.originalAssetTag === assetTag && c.assetTag !== assetTag ? 'Needs Repair' : c.type)}</td>
+            <td>${statusBadge(c.status)}</td>
+            <td style="font-size:12px">${escapeHtml(formatDueDate(c.due) || '-')}</td>
+            <td style="font-size:12px">${escapeHtml(formatDate(c.returnDate) || '-')}</td>
+            <td style="font-size:12px;color:var(--text-muted);">${escapeHtml(c.notes || c.damagedPart || '-')}</td>
+          </tr>`).join('') : `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">No checkout history for this device</td></tr>`}
+      </tbody>
+    </table>`;
+  modal.classList.add('active');
+}
+
+function closeDeviceHistory(event) {
+  if (event && event.target && event.target.id !== 'device-history-modal') return;
+  const modal = document.getElementById('device-history-modal');
+  if (modal) modal.classList.remove('active');
+}
+
+function getStudentHistoryRows(studentName) {
+  return [...checkouts]
+    .filter(c => String(c.studentName || '').toLowerCase() === String(studentName || '').toLowerCase())
+    .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+}
+
+function openStudentHistory(studentName) {
+  const modal = document.getElementById('device-history-modal');
+  const title = document.getElementById('device-history-title');
+  const subtitle = document.getElementById('device-history-subtitle');
+  const body = document.getElementById('device-history-body');
+  if (!modal || !title || !body) return;
+
+  const rows = getStudentHistoryRows(studentName);
+  const activeCount = rows.filter(c => c.status === 'Active').length;
+  const returnedCount = rows.filter(c => c.status === 'Returned').length;
+  const repairCount = rows.filter(c => c.type === 'Needs Repair').length;
+  const forgotCount = rows.filter(c => c.type === 'Forgot Device').length;
+  const lostCount = rows.filter(c => c.type === 'Lost').length;
+  const building = mostCommonValue(rows.map(c => c.building || ''));
+  const lastSeen = rows.length ? formatDate(rows[0].date) : 'No checkout records';
+
+  title.textContent = studentName || 'Student History';
+  if (subtitle) subtitle.textContent = building || 'No primary building';
+  body.innerHTML = `
+    <div class="detail-grid">
+      <div class="detail-box"><div class="detail-label">Checkouts</div><div class="detail-value">${rows.length}</div></div>
+      <div class="detail-box"><div class="detail-label">Active</div><div class="detail-value">${activeCount}</div></div>
+      <div class="detail-box"><div class="detail-label">Returned</div><div class="detail-value">${returnedCount}</div></div>
+      <div class="detail-box"><div class="detail-label">Forgot Device</div><div class="detail-value">${forgotCount}</div></div>
+      <div class="detail-box"><div class="detail-label">Repairs</div><div class="detail-value">${repairCount}</div></div>
+      <div class="detail-box"><div class="detail-label">Lost</div><div class="detail-value">${lostCount}</div></div>
+      <div class="detail-box"><div class="detail-label">Last Seen</div><div class="detail-value">${escapeHtml(lastSeen)}</div></div>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Asset Tag</th><th>Serial</th><th>Type</th><th>Status</th><th>Due</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        ${rows.length ? rows.map(c => `
+          <tr>
+            <td style="font-size:12px">${escapeHtml(formatDate(c.date))}</td>
+            <td>${deviceHistoryLink(c.assetTag)}</td>
+            <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(c.serial || '-')}</td>
+            <td>${badgeHtml(c.type)}</td>
+            <td>${statusBadge(c.status)}</td>
+            <td style="font-size:12px">${escapeHtml(formatDueDate(c.due) || '-')}</td>
+            <td style="font-size:12px;color:var(--text-muted);">${escapeHtml(c.notes || c.damagedPart || '-')}</td>
+          </tr>`).join('') : `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">No checkout history for this student</td></tr>`}
+      </tbody>
+    </table>`;
+  modal.classList.add('active');
+}
+
 function loanerStatusBadge(s) {
   const cls = s === 'Available' ? 'badge-active' : s === 'On Loan' ? 'badge-returned' : 'badge-repair';
   return `<span class="badge ${cls}">${escapeHtml(s)}</span>`;
+}
+
+function updateBulkCounts() {
+  const loanerEl = document.getElementById('loaner-bulk-count');
+  if (loanerEl) loanerEl.textContent = `${selectedLoanerTags.size.toLocaleString()} selected`;
+  const allEl = document.getElementById('all-inv-bulk-count');
+  if (allEl) allEl.textContent = `${selectedAllInventoryTags.size.toLocaleString()} selected`;
+}
+
+function getFilteredLoaners() {
+  const search = (document.getElementById('inv-search')?.value || '').toLowerCase();
+  const filter = document.getElementById('inv-status-filter')?.value || '';
+  return inventory.filter(d =>
+    (!search || [d.assetTag, d.model, d.serial, d.building, d.retirementReason].some(v => v && v.toLowerCase().includes(search))) &&
+    (!filter || d.status === filter)
+  );
+}
+
+function getFilteredAllInventory() {
+  const search   = (document.getElementById('all-inv-search')?.value || '').toLowerCase();
+  const filter   = document.getElementById('all-inv-status-filter')?.value || '';
+  const building = document.getElementById('all-inv-building-filter')?.value || '';
+  return allInventory.filter(d =>
+    (!search   || [d.assetTag, d.model, d.serial, d.building, d.owner, d.retirementReason].some(v => v && v.toLowerCase().includes(search))) &&
+    (!filter   || d.status === filter) &&
+    (!building || d.building === building)
+  );
+}
+
+function toggleLoanerSelection(tag, checked) {
+  if (checked) selectedLoanerTags.add(tag);
+  else selectedLoanerTags.delete(tag);
+  updateBulkCounts();
+}
+
+function toggleAllInventorySelection(tag, checked) {
+  if (checked) selectedAllInventoryTags.add(tag);
+  else selectedAllInventoryTags.delete(tag);
+  updateBulkCounts();
+}
+
+function selectVisibleLoaners() {
+  getFilteredLoaners().slice(0, 200).forEach(d => selectedLoanerTags.add(d.assetTag));
+  renderLoaners();
+}
+
+function clearLoanerSelection() {
+  selectedLoanerTags.clear();
+  renderLoaners();
+}
+
+function selectVisibleAllInventory() {
+  getFilteredAllInventory().slice(0, 200).forEach(d => selectedAllInventoryTags.add(d.assetTag));
+  renderAllInventory();
+}
+
+function clearAllInventorySelection() {
+  selectedAllInventoryTags.clear();
+  renderAllInventory();
+}
+
+function applyBulkStatus(records, selectedSet, status, restoreStatus) {
+  if (!status) { showToast('Choose a status first.', 'error'); return 0; }
+  const selected = records.filter(d => selectedSet.has(d.assetTag));
+  if (!selected.length) { showToast('Select at least one device first.', 'error'); return 0; }
+  let details = {};
+  if (status === 'Retired') {
+    const reason = prompt(`Retirement reason for ${selected.length} selected device${selected.length !== 1 ? 's' : ''}:`, '');
+    if (reason === null) return 0;
+    const cleanReason = reason.trim();
+    if (!cleanReason) { showToast('Retirement reason is required.', 'error'); return 0; }
+    details = { retiredDate: new Date().toString(), retirementReason: cleanReason };
+  }
+  selected.forEach(d => {
+    d.status = status;
+    if (status === 'Retired') {
+      d.retiredDate = details.retiredDate;
+      d.retirementReason = details.retirementReason;
+    } else if (restoreStatus || d.status !== 'Retired') {
+      d.retiredDate = '';
+      d.retirementReason = '';
+    }
+  });
+  return selected.length;
+}
+
+function applyBulkLoanerStatus() {
+  const status = document.getElementById('loaner-bulk-status')?.value || '';
+  const changed = applyBulkStatus(inventory, selectedLoanerTags, status, status !== 'Retired');
+  if (!changed) return;
+  save(); refreshAll(); syncInventoryToSheet();
+  showToast(`${changed.toLocaleString()} loaner device${changed !== 1 ? 's' : ''} updated.`, 'success');
+}
+
+function applyBulkAllInventoryStatus() {
+  const status = document.getElementById('all-inv-bulk-status')?.value || '';
+  const changed = applyBulkStatus(allInventory, selectedAllInventoryTags, status, status !== 'Retired');
+  if (!changed) return;
+  save(); refreshAll(); syncAllInventoryToSheet();
+  showToast(`${changed.toLocaleString()} inventory device${changed !== 1 ? 's' : ''} updated.`, 'success');
+}
+
+function retirementInfoHtml(device) {
+  if (device.status !== 'Retired') return '';
+  const pieces = [];
+  if (device.retiredDate) pieces.push(formatDueDate(device.retiredDate));
+  if (device.retirementReason) pieces.push(device.retirementReason);
+  if (!pieces.length) return '';
+  return `<br><span style="font-size:11px;color:var(--text-muted);">${escapeHtml(pieces.join(' - '))}</span>`;
 }
 
 function loanerLifecycleButton(d) {
@@ -1968,23 +2554,20 @@ function allInventoryLifecycleButton(d) {
 }
 
 function renderLoaners() {
-  const search = (document.getElementById('inv-search')?.value || '').toLowerCase();
-  const filter = document.getElementById('inv-status-filter')?.value || '';
   const tbody  = document.getElementById('inventory-tbody');
   if (!tbody) return;
 
-  const rows = inventory.filter(d =>
-    (!search || [d.assetTag, d.model, d.serial, d.building].some(v => v && v.toLowerCase().includes(search))) &&
-    (!filter || d.status === filter)
-  );
+  const rows = getFilteredLoaners();
 
   const countEl = document.getElementById('inv-count');
   if (countEl) countEl.textContent = `${rows.length.toLocaleString()} of ${inventory.length.toLocaleString()} devices`;
+  updateBulkCounts();
 
   tbody.innerHTML = rows.slice(0, 200).map(d => `
     <tr>
+      <td><input type="checkbox" aria-label="Select ${escapeHtml(d.assetTag)}" ${selectedLoanerTags.has(d.assetTag) ? 'checked' : ''} onclick="event.stopPropagation();toggleLoanerSelection('${jsStringAttr(d.assetTag)}', this.checked)" /></td>
       <td class="editable" onclick="startCellEdit(this,'loaner','assetTag','${jsStringAttr(d.assetTag)}','text')">
-        <code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${escapeHtml(d.assetTag)}</code><span class="edit-hint">✎</span>
+        ${deviceHistoryLink(d.assetTag)}<span class="edit-hint">✎</span>
       </td>
       <td class="editable" onclick="startCellEdit(this,'loaner','model','${jsStringAttr(d.assetTag)}','text')">
         <span style="font-size:13px">${escapeHtml(d.model)}</span><span class="edit-hint">✎</span>
@@ -1996,38 +2579,35 @@ function renderLoaners() {
         <span style="font-size:12px;color:var(--text-muted)">${escapeHtml(d.building||'-')}</span><span class="edit-hint">✎</span>
       </td>
       <td class="editable" data-store="loaner" data-field="status" data-key="${escapeHtml(d.assetTag)}" data-type="select" data-options="status-loaner" onclick="startCellEdit(this)">
-        ${loanerStatusBadge(d.status)}<span class="edit-hint">✎</span>
+        ${loanerStatusBadge(d.status)}${retirementInfoHtml(d)}<span class="edit-hint">✎</span>
       </td>
       <td><div class="actions">${loanerLifecycleButton(d)}<button class="btn btn-danger btn-sm" onclick="removeDevice('${jsStringAttr(d.assetTag)}')">Remove</button></div></td>
     </tr>`).join('');
 
   if (rows.length > 200) {
-    tbody.innerHTML += `<tr><td colspan="6" style="text-align:center;padding:1rem;color:var(--text-muted);font-size:13px;">Showing 200 of ${rows.length.toLocaleString()} — use search to filter</td></tr>`;
+    tbody.innerHTML += `<tr><td colspan="7" style="text-align:center;padding:1rem;color:var(--text-muted);font-size:13px;">Showing 200 of ${rows.length.toLocaleString()} — use search to filter</td></tr>`;
   }
 }
 
 function renderAllInventory() {
-  const search   = (document.getElementById('all-inv-search')?.value || '').toLowerCase();
-  const filter   = document.getElementById('all-inv-status-filter')?.value || '';
-  const building = document.getElementById('all-inv-building-filter')?.value || '';
   const tbody    = document.getElementById('all-inventory-tbody');
   if (!tbody) return;
 
-  const rows = allInventory.filter(d =>
-    (!search   || [d.assetTag, d.model, d.serial, d.building, d.owner].some(v => v && v.toLowerCase().includes(search))) &&
-    (!filter   || d.status === filter) &&
-    (!building || d.building === building)
-  );
+  const rows = getFilteredAllInventory();
 
   const countEl = document.getElementById('all-inv-count');
   if (countEl) countEl.textContent = `${rows.length.toLocaleString()} of ${allInventory.length.toLocaleString()} devices`;
 
+  const search   = (document.getElementById('all-inv-search')?.value || '').toLowerCase();
+  const filter   = document.getElementById('all-inv-status-filter')?.value || '';
+  const building = document.getElementById('all-inv-building-filter')?.value || '';
   const isFiltered = search || filter || building;
   const clearBtn = document.getElementById('all-inv-clear-btn');
   if (clearBtn) clearBtn.textContent = isFiltered ? `Delete Filtered (${rows.length.toLocaleString()})` : `Clear All (${allInventory.length.toLocaleString()})`;
+  updateBulkCounts();
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:3rem;color:var(--text-muted);">${allInventory.length ? 'No devices match your filters.' : 'No devices yet — import your TDT CSV to get started.'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:3rem;color:var(--text-muted);">${allInventory.length ? 'No devices match your filters.' : 'No devices yet — import your TDT CSV to get started.'}</td></tr>`;
     return;
   }
 
@@ -2035,8 +2615,9 @@ function renderAllInventory() {
     const statusCls = d.status==='Assigned' ? 'badge-returned' : d.status==='Unassigned' ? 'badge-active' : d.status==='Loaner'||d.status==='Daily Loaner' ? 'badge-active' : 'badge-repair';
     return `
     <tr>
+      <td><input type="checkbox" aria-label="Select ${escapeHtml(d.assetTag)}" ${selectedAllInventoryTags.has(d.assetTag) ? 'checked' : ''} onclick="event.stopPropagation();toggleAllInventorySelection('${jsStringAttr(d.assetTag)}', this.checked)" /></td>
       <td class="editable" onclick="startCellEdit(this,'all','assetTag','${jsStringAttr(d.assetTag)}','text')">
-        <code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${escapeHtml(d.assetTag)}</code><span class="edit-hint">✎</span>
+        ${deviceHistoryLink(d.assetTag)}<span class="edit-hint">✎</span>
       </td>
       <td class="editable" onclick="startCellEdit(this,'all','model','${jsStringAttr(d.assetTag)}','text')">
         <span style="font-size:13px">${escapeHtml(d.model)}</span><span class="edit-hint">✎</span>
@@ -2051,14 +2632,14 @@ function renderAllInventory() {
         <span style="font-size:12px;color:var(--text-muted)">${escapeHtml(d.owner||'-')}</span><span class="edit-hint">✎</span>
       </td>
       <td class="editable" data-store="all" data-field="status" data-key="${escapeHtml(d.assetTag)}" data-type="select" data-options="status-all" onclick="startCellEdit(this)">
-        <span class="badge ${statusCls}">${escapeHtml(d.status)}</span><span class="edit-hint">✎</span>
+        <span class="badge ${statusCls}">${escapeHtml(d.status)}</span>${retirementInfoHtml(d)}<span class="edit-hint">✎</span>
       </td>
       <td><div class="actions">${allInventoryLifecycleButton(d)}<button class="btn btn-danger btn-sm" onclick="removeAllInvDevice('${jsStringAttr(d.assetTag)}')">Delete</button></div></td>
     </tr>`;
   }).join('');
 
   if (rows.length > 200) {
-    tbody.innerHTML += `<tr><td colspan="7" style="text-align:center;padding:1rem;color:var(--text-muted);font-size:13px;">Showing 200 of ${rows.length.toLocaleString()} — use search or filters to narrow results</td></tr>`;
+    tbody.innerHTML += `<tr><td colspan="8" style="text-align:center;padding:1rem;color:var(--text-muted);font-size:13px;">Showing 200 of ${rows.length.toLocaleString()} — use search or filters to narrow results</td></tr>`;
   }
 }
 
@@ -2072,7 +2653,7 @@ function renderAvailable() {
   }
   tbody.innerHTML = avail.map(d => `
     <tr>
-      <td><code style="font-size:12px;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">${escapeHtml(d.assetTag)}</code></td>
+      <td>${deviceHistoryLink(d.assetTag)}</td>
       <td style="font-size:13px">${escapeHtml(d.model || '-')}</td>
       <td><span class="badge badge-active">${escapeHtml(d.status)}</span></td>
       <td><button class="btn btn-secondary btn-sm" onclick="prefillDevice('${jsStringAttr(d.assetTag)}','${jsStringAttr(d.serial||'')}')">Select</button></td>
@@ -2254,7 +2835,8 @@ async function submitCheckout() {
   }
 
   const dev = inventory.find(d => d.assetTag === asset);
-  if (dev && dev.status === 'Retired') {
+  const fullInvDev = allInventory.find(d => d.assetTag === asset);
+  if ((dev && dev.status === 'Retired') || (fullInvDev && fullInvDev.status === 'Retired')) {
     setCheckoutSubmitting(false);
     showToast('That device is retired. Restore it before checking it out.', 'error');
     return;
@@ -2336,10 +2918,32 @@ function addDevice() {
   showToast('Device added!', 'success');
 }
 
-function setLoanerDeviceStatus(tag, status, message) {
+function getRetirementDetails(device) {
+  const current = device.retirementReason ? `\n\nCurrent reason: ${device.retirementReason}` : '';
+  const reason = prompt(
+    `Why is ${device.assetTag} being retired?\n\nExamples: Broken, Obsolete, Missing, Parts only, Recycled, Other${current}`,
+    device.retirementReason || ''
+  );
+  if (reason === null) return null;
+  const cleanReason = reason.trim();
+  if (!cleanReason) {
+    showToast('Retirement reason is required.', 'error');
+    return null;
+  }
+  return { retiredDate: new Date().toString(), retirementReason: cleanReason };
+}
+
+function setLoanerDeviceStatus(tag, status, message, details = {}) {
   const dev = inventory.find(d => d.assetTag === tag);
   if (!dev) return;
   dev.status = status;
+  if (status === 'Retired') {
+    dev.retiredDate = details.retiredDate || dev.retiredDate || new Date().toString();
+    dev.retirementReason = details.retirementReason || dev.retirementReason || '';
+  } else {
+    dev.retiredDate = '';
+    dev.retirementReason = '';
+  }
   save(); refreshAll();
   upsertDeviceToSheet(dev);
   showToast(message, 'success');
@@ -2349,7 +2953,9 @@ function retireLoanerDevice(tag) {
   const dev = inventory.find(d => d.assetTag === tag);
   if (!dev) return;
   if (dev.status === 'On Loan' && !confirm('This device is currently marked On Loan. Retire it anyway?')) return;
-  setLoanerDeviceStatus(tag, 'Retired', 'Device retired.');
+  const details = getRetirementDetails(dev);
+  if (!details) return;
+  setLoanerDeviceStatus(tag, 'Retired', 'Device retired.', details);
 }
 
 function restoreLoanerDevice(tag) {
@@ -2388,6 +2994,8 @@ function importFromCSV(event, target) {
         status    : header.findIndex(h => h === 'DeviceStatus'),
         ownerFirst: header.findIndex(h => h === 'OwnerFirstName'),
         ownerLast : header.findIndex(h => h === 'OwnerLastName'),
+        retiredDate: header.findIndex(h => /retired.?date/i.test(h)),
+        retirementReason: header.findIndex(h => /retirement.?reason|retired.?reason/i.test(h)),
       };
       if (idx.assetTag === -1) idx.assetTag = header.findIndex(h => /asset.?tag/i.test(h));
       if (idx.serial   === -1) idx.serial   = header.findIndex(h => /serial/i.test(h));
@@ -2407,36 +3015,84 @@ function importFromCSV(event, target) {
       }
       function col(cols, i) { return (i !== -1 && cols[i] !== undefined) ? cols[i].trim() : ''; }
 
-      let added = 0, skipped = 0, dupes = 0, retired = 0;
+      let added = 0, skipped = 0, dupes = 0, retired = 0, statusChanges = 0;
       const dataStore = target === 'loaner' ? inventory : allInventory;
-      const existing  = new Set(dataStore.map(d => d.assetTag));
+      const existing  = new Map(dataStore.map(d => [d.assetTag, d]));
+      const pendingAdds = [];
+      const pendingUpdates = [];
 
       for (let i = 1; i < lines.length; i++) {
         const cols   = parseRow(lines[i]);
         let status = col(cols, idx.status);
-        if (status === 'Decommissioned') { status = 'Retired'; retired++; }
+        const wasDecommissioned = status === 'Decommissioned';
+        if (wasDecommissioned) { status = 'Retired'; retired++; }
         const assetTag = col(cols, idx.assetTag);
         if (!assetTag) { skipped++; continue; }
-        if (existing.has(assetTag)) { dupes++; continue; }
 
         const mfrName   = col(cols, idx.mfr);
         const modelNum  = col(cols, idx.model);
         const firstName = col(cols, idx.ownerFirst);
         const lastName  = col(cols, idx.ownerLast);
         const owner     = [firstName, lastName].filter(Boolean).join(' ');
+        const retiredDate = col(cols, idx.retiredDate) || (status === 'Retired' ? new Date().toString() : '');
+        const retirementReason = col(cols, idx.retirementReason) || (wasDecommissioned ? 'Imported as Decommissioned' : '');
 
-        dataStore.push({
+        if (existing.has(assetTag)) {
+          dupes++;
+          const existingDevice = existing.get(assetTag);
+          if (status && existingDevice.status !== status) {
+            pendingUpdates.push({ existingDevice, status, retiredDate, retirementReason });
+            statusChanges++;
+          }
+          continue;
+        }
+
+        const device = {
           assetTag, serial: col(cols, idx.serial),
           model: (mfrName ? `${mfrName} ${modelNum}` : modelNum).trim() || 'Unknown',
           building: col(cols, idx.building), status: status || 'Unassigned', owner,
-        });
-        existing.add(assetTag); added++;
+          retiredDate, retirementReason,
+        };
+        pendingAdds.push(device);
+        existing.set(assetTag, device);
+        added++;
       }
 
+      const preview = [
+        `Import preview for ${target === 'loaner' ? 'Loaner Devices' : 'Full Inventory'}:`,
+        '',
+        `${added.toLocaleString()} new device${added !== 1 ? 's' : ''}`,
+        `${dupes.toLocaleString()} duplicate asset tag${dupes !== 1 ? 's' : ''}`,
+        `${statusChanges.toLocaleString()} duplicate status change${statusChanges !== 1 ? 's' : ''}`,
+        `${retired.toLocaleString()} retired/decommissioned device${retired !== 1 ? 's' : ''}`,
+        `${skipped.toLocaleString()} skipped blank row${skipped !== 1 ? 's' : ''}`,
+        '',
+        'Continue and sync these changes to Sheets?'
+      ].join('\n');
+      if (!added && !statusChanges) {
+        showBanner(target, `Import preview: no new devices or status changes found.${dupes ? ' ' + dupes + ' duplicates skipped.' : ''}${skipped ? ' ' + skipped + ' blank rows skipped.' : ''}`, 'success');
+        return;
+      }
+      if (!confirm(preview)) {
+        showBanner(target, 'Import canceled. No changes were saved.', 'success');
+        return;
+      }
+
+      pendingAdds.forEach(device => dataStore.push(device));
+      pendingUpdates.forEach(({ existingDevice, status, retiredDate, retirementReason }) => {
+        existingDevice.status = status;
+        if (status === 'Retired') {
+          existingDevice.retiredDate = retiredDate || existingDevice.retiredDate || new Date().toString();
+          existingDevice.retirementReason = retirementReason || existingDevice.retirementReason || 'Imported status change';
+        } else {
+          existingDevice.retiredDate = '';
+          existingDevice.retirementReason = '';
+        }
+      });
       save(); refreshAll();
       if (target === 'loaner') syncInventoryToSheet();
       else syncAllInventoryToSheet();
-      showBanner(target, `✓ Imported ${added.toLocaleString()} devices.${retired ? ' ' + retired + ' marked retired.' : ''}${dupes ? ' ' + dupes + ' duplicates skipped.' : ''}${skipped ? ' ' + skipped + ' blank rows skipped.' : ''} Syncing to Sheet...`, 'success');
+      showBanner(target, `✓ Imported ${added.toLocaleString()} devices.${statusChanges ? ' ' + statusChanges + ' duplicate statuses updated.' : ''}${retired ? ' ' + retired + ' marked retired.' : ''}${dupes ? ' ' + dupes + ' duplicates reviewed.' : ''}${skipped ? ' ' + skipped + ' blank rows skipped.' : ''} Syncing to Sheet...`, 'success');
     } catch(err) {
       showBanner(target, 'Import failed: ' + err.message, 'error');
     }
@@ -2606,17 +3262,28 @@ function removeAllInvDevice(tag) {
   showToast('Device deleted.');
 }
 
-function setAllInvDeviceStatus(tag, status, message) {
+function setAllInvDeviceStatus(tag, status, message, details = {}) {
   const dev = allInventory.find(d => d.assetTag === tag);
   if (!dev) return;
   dev.status = status;
+  if (status === 'Retired') {
+    dev.retiredDate = details.retiredDate || dev.retiredDate || new Date().toString();
+    dev.retirementReason = details.retirementReason || dev.retirementReason || '';
+  } else {
+    dev.retiredDate = '';
+    dev.retirementReason = '';
+  }
   save(); refreshAll();
   upsertAllDeviceToSheet(dev);
   showToast(message, 'success');
 }
 
 function retireAllInvDevice(tag) {
-  setAllInvDeviceStatus(tag, 'Retired', 'Device retired.');
+  const dev = allInventory.find(d => d.assetTag === tag);
+  if (!dev) return;
+  const details = getRetirementDetails(dev);
+  if (!details) return;
+  setAllInvDeviceStatus(tag, 'Retired', 'Device retired.', details);
 }
 
 function restoreAllInvDevice(tag) {
@@ -2629,7 +3296,7 @@ function clearAllInventory() {
   const building = document.getElementById('all-inv-building-filter')?.value || '';
   const isFiltered = search || filter || building;
   const toDelete = allInventory.filter(d =>
-    (!search   || [d.assetTag, d.model, d.serial, d.building, d.owner].some(v => v && v.toLowerCase().includes(search))) &&
+    (!search   || [d.assetTag, d.model, d.serial, d.building, d.owner, d.retirementReason].some(v => v && v.toLowerCase().includes(search))) &&
     (!filter   || d.status === filter) &&
     (!building || d.building === building)
   );
@@ -2677,9 +3344,41 @@ function exportCSV() {
   a.click(); showToast('CSV exported!', 'success');
 }
 
+function exportOverdueCSV() {
+  const headers = ['ID','Student Name','Building','Asset Tag','Serial','Type','Due Back','Days Overdue','Notes'];
+  const rows = getOverdueRows().map(c => [c.id, c.studentName, c.building||'', c.assetTag, c.serial||'', c.type, c.due||'', overdueDays(c), c.notes||'']);
+  const csv = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'overdue-loaners-' + (selectedSchoolYear ? schoolYearLabel(selectedSchoolYear).replace('/', '-') + '-' : '') + new Date().toISOString().slice(0,10) + '.csv';
+  a.click(); showToast('Overdue CSV exported!', 'success');
+}
+
+function exportYearEndReportCSV() {
+  const yearLabel = selectedSchoolYear ? schoolYearLabel(selectedSchoolYear) : 'All School Years';
+  const summary = [
+    ['Report', yearLabel],
+    ['Total Checkouts', getSchoolYearCheckouts().length],
+    ['Forgot Device', getSchoolYearCheckouts().filter(c => c.type === 'Forgot Device').length],
+    ['Repairs / Lost', getSchoolYearCheckouts().filter(c => c.type === 'Needs Repair' || c.type === 'Lost').length],
+    ['Retired Devices', [...inventory, ...allInventory].filter(d => d.status === 'Retired').length],
+    [],
+    ['Building','Checkouts','Active','Overdue','Available','Retired'],
+    ...getReportRows().map(r => [r.building, r.checkouts, r.active, r.overdue, r.available, r.retired]),
+    [],
+    ['Top Repeat Students','Checkouts','Primary Building'],
+    ...getTopStudentRows(20).map(r => [r.name, r.count, r.building || '']),
+  ];
+  const csv = summary.map(r => r.map(csvCell).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'loaner-report-' + (selectedSchoolYear ? schoolYearLabel(selectedSchoolYear).replace('/', '-') : 'all-years') + '-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click(); showToast('Report CSV exported!', 'success');
+}
+
 function exportLoanersCSV() {
-  const headers = ['Asset Tag','Serial Number','Model','Building','Status'];
-  const rows = inventory.map(d => [d.assetTag||'', d.serial||'', d.model||'', d.building||'', d.status||'']);
+  const headers = ['Asset Tag','Serial Number','Model','Building','Status','Retired Date','Retirement Reason'];
+  const rows = inventory.map(d => [d.assetTag||'', d.serial||'', d.model||'', d.building||'', d.status||'', d.retiredDate||'', d.retirementReason||'']);
   const csv = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
@@ -2687,14 +3386,38 @@ function exportLoanersCSV() {
   a.click(); showToast('Loaner devices exported!', 'success');
 }
 
+function exportSelectedLoanersCSV() {
+  const rowsToExport = inventory.filter(d => selectedLoanerTags.has(d.assetTag));
+  if (!rowsToExport.length) { showToast('Select at least one loaner device first.', 'error'); return; }
+  const headers = ['Asset Tag','Serial Number','Model','Building','Status','Retired Date','Retirement Reason'];
+  const rows = rowsToExport.map(d => [d.assetTag||'', d.serial||'', d.model||'', d.building||'', d.status||'', d.retiredDate||'', d.retirementReason||'']);
+  const csv = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'selected-loaner-devices-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click(); showToast('Selected loaner devices exported!', 'success');
+}
+
 function exportAllInventoryCSV() {
-  const headers = ['Asset Tag','Serial Number','Model','Building','Assigned To','Status'];
-  const rows = allInventory.map(d => [d.assetTag||'', d.serial||'', d.model||'', d.building||'', d.owner||'', d.status||'']);
+  const headers = ['Asset Tag','Serial Number','Model','Building','Assigned To','Status','Retired Date','Retirement Reason'];
+  const rows = allInventory.map(d => [d.assetTag||'', d.serial||'', d.model||'', d.building||'', d.owner||'', d.status||'', d.retiredDate||'', d.retirementReason||'']);
   const csv = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download = 'full-inventory-' + new Date().toISOString().slice(0,10) + '.csv';
   a.click(); showToast('Full inventory exported!', 'success');
+}
+
+function exportSelectedAllInventoryCSV() {
+  const rowsToExport = allInventory.filter(d => selectedAllInventoryTags.has(d.assetTag));
+  if (!rowsToExport.length) { showToast('Select at least one full inventory device first.', 'error'); return; }
+  const headers = ['Asset Tag','Serial Number','Model','Building','Assigned To','Status','Retired Date','Retirement Reason'];
+  const rows = rowsToExport.map(d => [d.assetTag||'', d.serial||'', d.model||'', d.building||'', d.owner||'', d.status||'', d.retiredDate||'', d.retirementReason||'']);
+  const csv = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'selected-full-inventory-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click(); showToast('Selected full inventory devices exported!', 'success');
 }
 
 // ─── Sheet sync helpers ───────────────────────────────────────────────────────
@@ -2775,6 +3498,15 @@ function startCellEdit(td, store, field, assetTag, inputType, options) {
   function commit() {
     const newVal = editor.value;
     const oldTag = rec.assetTag;
+    if (field === 'status' && newVal === 'Retired' && rec.status !== 'Retired') {
+      const details = getRetirementDetails(rec);
+      if (!details) return;
+      rec.retiredDate = details.retiredDate;
+      rec.retirementReason = details.retirementReason;
+    } else if (field === 'status' && newVal !== 'Retired') {
+      rec.retiredDate = '';
+      rec.retirementReason = '';
+    }
     rec[field] = newVal;
     if (field === 'assetTag' && store === 'loaner') {
       checkouts.forEach(c => { if (c.assetTag === oldTag) c.assetTag = newVal; });

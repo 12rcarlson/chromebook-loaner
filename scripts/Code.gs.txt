@@ -30,11 +30,13 @@ const CHECKOUT_HEADERS = [
 ];
 
 const INVENTORY_HEADERS = [
-  'Asset Tag', 'Serial Number', 'Model', 'Building', 'Status', 'Last Updated'
+  'Asset Tag', 'Serial Number', 'Model', 'Building', 'Status', 'Last Updated',
+  'Retired Date', 'Retirement Reason'
 ];
 
 const ALL_INVENTORY_HEADERS = [
-  'Asset Tag', 'Serial Number', 'Model', 'Building', 'Assigned To', 'Status', 'Last Updated'
+  'Asset Tag', 'Serial Number', 'Model', 'Building', 'Assigned To', 'Status', 'Last Updated',
+  'Retired Date', 'Retirement Reason'
 ];
 
 const PARTS_HEADERS = [
@@ -207,10 +209,16 @@ function validateLoanerDevice_(d) {
     model   : cleanText_(d.model, 160),
     building: cleanText_(d.building, 120),
     status  : normalizeDeviceStatus_(cleanText_(d.status || 'Available', 40)),
+    retiredDate: cleanText_(d.retiredDate, 80),
+    retirementReason: cleanText_(d.retirementReason, 250),
   };
   if (!device.assetTag) throw new Error('Asset tag is required.');
   assertAllowed_(device.status, ALLOWED_LOANER_STATUSES, 'loaner status');
   assertAllowed_(device.building, ALLOWED_BUILDINGS, 'building');
+  if (device.status !== 'Retired') {
+    device.retiredDate = '';
+    device.retirementReason = '';
+  }
   return device;
 }
 
@@ -223,10 +231,16 @@ function validateAllInventoryDevice_(d) {
     building: cleanText_(d.building, 120),
     owner   : cleanText_(d.owner, 160),
     status  : normalizeDeviceStatus_(cleanText_(d.status || 'Unassigned', 40)),
+    retiredDate: cleanText_(d.retiredDate, 80),
+    retirementReason: cleanText_(d.retirementReason, 250),
   };
   if (!device.assetTag) throw new Error('Asset tag is required.');
   assertAllowed_(device.status, ALLOWED_ALL_INVENTORY_STATUSES, 'inventory status');
   assertAllowed_(device.building, ALLOWED_BUILDINGS, 'building');
+  if (device.status !== 'Retired') {
+    device.retiredDate = '';
+    device.retirementReason = '';
+  }
   return device;
 }
 
@@ -442,6 +456,8 @@ function getAllData_() {
           model   : String(r[2] || ''),
           building: String(r[3] || ''),
           status  : String(r[4] || ''),
+          retiredDate: String(r[6] || ''),
+          retirementReason: String(r[7] || ''),
         }));
     }
 
@@ -458,6 +474,8 @@ function getAllData_() {
           building: String(r[3] || ''),
           owner   : String(r[4] || ''),
           status  : String(r[5] || ''),
+          retiredDate: String(r[7] || ''),
+          retirementReason: String(r[8] || ''),
         }));
     }
 
@@ -589,7 +607,8 @@ function upsertDevice(d) {
 
   const row = [
     d.assetTag || '', d.serial || '', d.model || '',
-    d.building || '', d.status || '', now
+    d.building || '', d.status || '', now,
+    d.retiredDate || '', d.retirementReason || ''
   ];
 
   const rowNum = findRowByKey(sheet, d.assetTag, 1);
@@ -606,7 +625,7 @@ function upsertDevice(d) {
 function styleInventoryRow(sheet, rowNum, status) {
   const bg = rowNum % 2 === 0 ? '#f8f7f4' : null;
   sheet.getRange(rowNum, 1, 1, 4).setBackground(bg);
-  sheet.getRange(rowNum, 6, 1, 1).setBackground(bg);
+  sheet.getRange(rowNum, 6, 1, 3).setBackground(bg);
   sheet.getRange(rowNum, 5, 1, 1).setBackground(inventoryStatusColor(status));
 }
 
@@ -633,7 +652,8 @@ function upsertAllDevice(d) {
 
   const row = [
     d.assetTag || '', d.serial || '', d.model || '',
-    d.building || '', d.owner || '', d.status || '', now
+    d.building || '', d.owner || '', d.status || '', now,
+    d.retiredDate || '', d.retirementReason || ''
   ];
 
   const rowNum = findRowByKey(sheet, d.assetTag, 1);
@@ -650,7 +670,7 @@ function upsertAllDevice(d) {
 function styleAllInventoryRow(sheet, rowNum, status) {
   const bg = rowNum % 2 === 0 ? '#f8f7f4' : null;
   sheet.getRange(rowNum, 1, 1, 5).setBackground(bg);
-  sheet.getRange(rowNum, 7, 1, 1).setBackground(bg);
+  sheet.getRange(rowNum, 7, 1, 3).setBackground(bg);
   sheet.getRange(rowNum, 6, 1, 1).setBackground(allInventoryStatusColor(status));
 }
 
@@ -777,14 +797,15 @@ function syncInventory(devices) {
 
   const rows = devices.map(d => [
     d.assetTag || '', d.serial || '', d.model || '',
-    d.building || '', d.status || '', now
+    d.building || '', d.status || '', now,
+    d.retiredDate || '', d.retirementReason || ''
   ]);
   sheet.getRange(2, 1, rows.length, INVENTORY_HEADERS.length).setValues(rows);
   sheet.getRange(2, 5, rows.length, 1).setBackgrounds(rows.map(r => [inventoryStatusColor(r[4])]));
   for (let i = 0; i < rows.length; i++) {
     const bg = i % 2 === 0 ? '#f8f7f4' : null;
     sheet.getRange(i + 2, 1, 1, 4).setBackground(bg);
-    sheet.getRange(i + 2, 6, 1, 1).setBackground(bg);
+    sheet.getRange(i + 2, 6, 1, 3).setBackground(bg);
   }
   sheet.setColumnWidths(1, INVENTORY_HEADERS.length, 140);
   SpreadsheetApp.flush();
@@ -802,7 +823,8 @@ function syncAllInventory(devices) {
 
   const rows = devices.map(d => [
     d.assetTag || '', d.serial || '', d.model || '',
-    d.building || '', d.owner || '', d.status || '', now
+    d.building || '', d.owner || '', d.status || '', now,
+    d.retiredDate || '', d.retirementReason || ''
   ]);
   sheet.getRange(2, 1, rows.length, ALL_INVENTORY_HEADERS.length).setValues(rows);
   const statusBgs = rows.map(r => [allInventoryStatusColor(r[5])]);
@@ -810,7 +832,7 @@ function syncAllInventory(devices) {
   for (let i = 0; i < rows.length; i++) {
     const bg = i % 2 === 0 ? '#f8f7f4' : null;
     sheet.getRange(i + 2, 1, 1, 5).setBackground(bg);
-    sheet.getRange(i + 2, 7, 1, 1).setBackground(bg);
+    sheet.getRange(i + 2, 7, 1, 3).setBackground(bg);
     sheet.getRange(i + 2, 6, 1, 1).setBackground(statusBgs[i][0]);
   }
   sheet.setColumnWidths(1, ALL_INVENTORY_HEADERS.length, 140);

@@ -898,6 +898,7 @@
     </svg>
     Chromebook Loaner System
     <span class="school-name">— Bureau Valley</span>
+    <span class="school-name">v2026.05.08 upgrades</span>
   </div>
   <div style="display:flex;align-items:center;gap:12px;">
     <span style="font-size:13px; opacity:0.65;" id="clock"></span>
@@ -914,7 +915,7 @@
   <button onclick="showPage('loaners')">Loaners</button>
   <button onclick="showPage('inventory')">Inventory</button>
   <button onclick="showPage('parts')">Parts Inventory</button>
-  <button onclick="showPage('upgrades')">Upgrade Backlog</button>
+  <button onclick="showPage('upgrades')">Completed Upgrades</button>
 </nav>
 
 <main>
@@ -1043,6 +1044,7 @@
           <div class="form-group">
             <label for="co-due">Due Back</label>
             <input type="date" id="co-due" />
+            <div id="co-due-hint" class="field-hint"></div>
           </div>
           <div class="form-group full" id="damaged-part-section" style="display:none; background:var(--bg-surface); border:1px solid var(--border); border-radius:8px; padding:14px; gap:10px;">
             <label style="font-size:13px; font-weight:600; color:var(--text);">Repair Details</label>
@@ -1523,12 +1525,12 @@
     </div>
   </div>
 
-  <!-- UPGRADE BACKLOG -->
+  <!-- COMPLETED UPGRADES -->
   <div id="page-upgrades" class="page">
-    <h1 class="section-heading">Upgrade Backlog</h1>
+    <h1 class="section-heading">Completed Upgrades</h1>
     <div class="card">
       <div class="card-header">
-        <h2>Possible Next Upgrades</h2>
+        <h2>Completed This Batch</h2>
       </div>
       <div class="card-body">
         <div class="upgrade-grid">
@@ -3570,6 +3572,14 @@ function getCheckoutDefaultDueDate(type) {
   return formatDateInputValue(d);
 }
 
+function getCheckoutDueHint(type) {
+  const today = new Date();
+  if (type === 'Forgot Device' && today.getDay() === 5) {
+    return 'Friday forgot-device checkout: due back Monday.';
+  }
+  return 'Default due date is the next day.';
+}
+
 function getTomorrow() {
   return getCheckoutDefaultDueDate('');
 }
@@ -3578,6 +3588,8 @@ function updateCheckoutDueDefault() {
   const type = document.getElementById('co-type')?.value || 'Forgot Device';
   const due = document.getElementById('co-due');
   if (due) due.value = getCheckoutDefaultDueDate(type);
+  const hint = document.getElementById('co-due-hint');
+  if (hint) hint.textContent = getCheckoutDueHint(type);
 }
 
 // ─── Toast ────────────────────────────────────────────────────────────────────

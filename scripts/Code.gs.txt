@@ -63,11 +63,14 @@ const STUDENT_CACHE_STALE_SECONDS = 7 * 24 * 60 * 60;
 const AUTH_TOKEN_SECONDS = 30 * 24 * 60 * 60;
 const MAX_BULK_ROWS = 6000;
 const ALLOWED_INCIDENT_TYPES = ['Forgot Device', 'Needs Repair', 'Lost', 'Daily Loaner'];
-const ALLOWED_CHECKOUT_STATUSES = ['Active', 'Returned'];
+const ALLOWED_CHECKOUT_STATUSES = ['Active', 'Returned', 'Archived'];
 const ALLOWED_LOANER_STATUSES = ['Available', 'On Loan', 'Loaner', 'Daily Loaner', 'Needs Repair', 'Retired'];
 const ALLOWED_ALL_INVENTORY_STATUSES = ['Assigned', 'Unassigned', 'Loaner', 'Daily Loaner', 'Needs Repair', 'Forgot Device', 'Retired'];
 const ALLOWED_BUILDINGS = [
   '',
+  'BVHS',
+  'BVJHE',
+  'Other',
   'Bureau Valley High School',
   'Bureau Valley Elementary and Junior High',
   'Bureau Valley Elementary-Wyanet',
@@ -191,6 +194,8 @@ function validateCheckout_(d) {
     originalAssetTag: cleanText_(d.originalAssetTag, 80),
     date            : cleanText_(d.date, 80),
     due             : cleanText_(d.due, 80),
+    status          : cleanText_(d.status || 'Active', 40),
+    returnDate      : cleanText_(d.returnDate, 80),
     notes           : cleanText_(d.notes, 1000),
   };
   if (!record.id || !record.studentName || !record.assetTag || !record.type) {
@@ -198,6 +203,7 @@ function validateCheckout_(d) {
   }
   assertAllowed_(record.type, ALLOWED_INCIDENT_TYPES, 'incident type');
   assertAllowed_(record.building, ALLOWED_BUILDINGS, 'building');
+  assertAllowed_(record.status, ALLOWED_CHECKOUT_STATUSES, 'checkout status');
   return record;
 }
 
@@ -520,6 +526,8 @@ function dispatch(data) {
     // Checkouts (always row-level)
     case 'checkout':         appendCheckout(data);                                    break;
     case 'return':           markReturned(data.id, data.returnDate);                  break;
+    case 'archiveCheckout':  archiveCheckout(data.id, data.archivedAt);               break;
+    case 'restoreCheckout':  restoreCheckout(data.id, data.status, data.returnDate);  break;
     case 'deleteCheckout':   deleteCheckout(data.id);                                 break;
 
     // Loaner pool — single record
@@ -556,15 +564,31 @@ function appendCheckout(d) {
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, CHECKOUT_SHEET);
   ensureHeaders(sheet, CHECKOUT_HEADERS);
-  if (findRowByKey(sheet, d.id, 1)) return;
+  const existingRow = findRowByKey(sheet, d.id, 1);
+  if (existingRow) {
+    setCheckoutStatus_(sheet, existingRow, d.status, d.returnDate);
+    return;
+  }
   sheet.appendRow([
     d.id, d.studentName || '', d.grade || '', d.building || '',
     d.assetTag || '', d.serial || '', d.type || '', d.damagedPart || '',
     d.originalAssetTag || '', d.date || '', d.due || '',
-    'Active', '', d.notes || ''
+    d.status || 'Active', d.returnDate || '', d.notes || ''
   ]);
   formatLastRow(sheet);
   conditionalFormat(sheet);
+}
+
+function setCheckoutStatus_(sheet, rowNum, status, returnDate) {
+  ensureHeaders(sheet, CHECKOUT_HEADERS);
+  status = cleanText_(status || 'Active', 40);
+  returnDate = cleanText_(returnDate, 80);
+  assertAllowed_(status, ALLOWED_CHECKOUT_STATUSES, 'checkout status');
+  const headers = sheet.getRange(1, 1, 1, CHECKOUT_HEADERS.length).getValues()[0];
+  const statusCol = headers.indexOf('Status') + 1;
+  const returnCol = headers.indexOf('Return Date') + 1;
+  if (statusCol) sheet.getRange(rowNum, statusCol).setValue(status);
+  if (returnCol) sheet.getRange(rowNum, returnCol).setValue(returnDate);
 }
 
 function markReturned(id, returnDate) {
@@ -572,16 +596,27 @@ function markReturned(id, returnDate) {
   returnDate = cleanText_(returnDate, 80);
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = getOrCreateSheet(ss, CHECKOUT_SHEET);
-  const data  = sheet.getDataRange().getValues();
-  const statusCol = data[0].indexOf('Status') + 1;
-  const returnCol = data[0].indexOf('Return Date') + 1;
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(id)) {
-      if (statusCol) sheet.getRange(i + 1, statusCol).setValue('Returned');
-      if (returnCol) sheet.getRange(i + 1, returnCol).setValue(returnDate);
-      break;
-    }
-  }
+  const rowNum = findRowByKey(sheet, id, 1);
+  if (rowNum) setCheckoutStatus_(sheet, rowNum, 'Returned', returnDate);
+}
+
+function archiveCheckout(id, archivedAt) {
+  id = cleanText_(id, 40);
+  archivedAt = cleanText_(archivedAt, 80) || new Date().toISOString();
+  const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = getOrCreateSheet(ss, CHECKOUT_SHEET);
+  const rowNum = findRowByKey(sheet, id, 1);
+  if (rowNum) setCheckoutStatus_(sheet, rowNum, 'Archived', archivedAt);
+}
+
+function restoreCheckout(id, status, returnDate) {
+  id = cleanText_(id, 40);
+  status = cleanText_(status || 'Active', 40);
+  returnDate = cleanText_(returnDate, 80);
+  const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = getOrCreateSheet(ss, CHECKOUT_SHEET);
+  const rowNum = findRowByKey(sheet, id, 1);
+  if (rowNum) setCheckoutStatus_(sheet, rowNum, status, returnDate);
 }
 
 function deleteCheckout(id) {

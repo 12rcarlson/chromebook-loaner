@@ -179,6 +179,36 @@
       color: var(--text-muted);
     }
 
+    .building-picks {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .building-pick {
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 10px 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .building-pick:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: var(--primary-light);
+    }
+
+    .building-pick.active {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #fff;
+    }
+
     .field-hint.error { color: var(--danger); }
     .field-hint.warning { color: var(--warning); }
     .field-hint.success { color: var(--accent); }
@@ -486,6 +516,10 @@
       opacity: 0;
       transition: all 0.3s;
       z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      max-width: min(420px, calc(100vw - 32px));
     }
 
     .toast.show {
@@ -495,6 +529,74 @@
 
     .toast.success { background: #085041; }
     .toast.error { background: var(--danger); }
+
+    .toast button {
+      border: 1px solid rgba(255,255,255,0.45);
+      background: rgba(255,255,255,0.14);
+      color: #fff;
+      border-radius: 6px;
+      padding: 5px 9px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .app-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.38);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1200;
+      padding: 20px;
+    }
+
+    .app-modal-backdrop.active { display: flex; }
+
+    .app-modal {
+      width: min(460px, 100%);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 16px 50px rgba(0,0,0,0.25);
+      overflow: hidden;
+    }
+
+    .app-modal-header {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .app-modal-title {
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .app-modal-body {
+      padding: 16px 18px;
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    #app-modal-message { white-space: pre-wrap; }
+
+    .app-modal-body textarea {
+      width: 100%;
+      min-height: 92px;
+      margin-top: 12px;
+      resize: vertical;
+    }
+
+    .app-modal-actions {
+      padding: 14px 18px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      background: var(--bg-surface);
+    }
 
     input[type="date"] {
       width: 100%;
@@ -945,10 +1047,9 @@
     <div class="building-filter-bar">
       <span class="bfb-label">Filter by building:</span>
       <button class="bfb-btn active" data-building="" onclick="setDashboardBuilding(this)">All Buildings</button>
-      <button class="bfb-btn" data-building="Bureau Valley High School" onclick="setDashboardBuilding(this)">BVHS</button>
-      <button class="bfb-btn" data-building="Bureau Valley Elementary and Junior High" onclick="setDashboardBuilding(this)">BVJHE</button>
-      <button class="bfb-btn" data-building="Bureau Valley Elementary-Wyanet" onclick="setDashboardBuilding(this)">BVW</button>
-      <button class="bfb-btn" data-building="Bureau Valley North" onclick="setDashboardBuilding(this)">BVN</button>
+      <button class="bfb-btn" data-building="BVHS" onclick="setDashboardBuilding(this)">BVHS</button>
+      <button class="bfb-btn" data-building="BVJHE" onclick="setDashboardBuilding(this)">BVJHE</button>
+      <button class="bfb-btn" data-building="Other" onclick="setDashboardBuilding(this)">Other</button>
       <span class="bfb-label">School year:</span>
       <select id="school-year-filter" onchange="setSchoolYearFilter(this.value)" style="width:150px;"></select>
     </div>
@@ -1015,14 +1116,13 @@
           </div>
           <select id="co-grade" style="display:none"></select>
           <div class="form-group">
-            <label for="co-building">Building</label>
-            <select id="co-building">
-              <option value="">Select building</option>
-              <option>Bureau Valley High School</option>
-              <option>Bureau Valley Elementary and Junior High</option>
-              <option>Bureau Valley Elementary-Wyanet</option>
-              <option>Bureau Valley North</option>
-            </select>
+            <label>Building</label>
+            <input type="hidden" id="co-building" value="BVHS" />
+            <div class="building-picks" role="group" aria-label="Checkout building">
+              <button class="building-pick active" type="button" data-building="BVHS" onclick="setCheckoutBuilding(this)">BVHS</button>
+              <button class="building-pick" type="button" data-building="BVJHE" onclick="setCheckoutBuilding(this)">BVJHE</button>
+              <button class="building-pick" type="button" data-building="Other" onclick="setCheckoutBuilding(this)">Other</button>
+            </div>
           </div>
           <div class="form-group">
             <label for="co-asset">Asset Tag</label>
@@ -1131,10 +1231,9 @@
       </select>
       <select id="incident-building-filter" onchange="renderIncidents()" style="width:180px;">
         <option value="">All Buildings</option>
-        <option>Bureau Valley High School</option>
-        <option>Bureau Valley Elementary and Junior High</option>
-        <option>Bureau Valley Elementary-Wyanet</option>
-        <option>Bureau Valley North</option>
+        <option>BVHS</option>
+        <option>BVJHE</option>
+        <option>Other</option>
       </select>
       <select id="incident-school-year-filter" onchange="setSchoolYearFilter(this.value)" style="width:150px;"></select>
       <button class="btn btn-secondary" onclick="exportCSV()">⬇ Export CSV</button>
@@ -1172,10 +1271,9 @@
       <input type="text" id="overdue-search" placeholder="Search student, asset tag, serial, or building..." oninput="renderOverdue()" />
       <select id="overdue-building-filter" onchange="renderOverdue()" style="width:200px;">
         <option value="">All Buildings</option>
-        <option>Bureau Valley High School</option>
-        <option>Bureau Valley Elementary and Junior High</option>
-        <option>Bureau Valley Elementary-Wyanet</option>
-        <option>Bureau Valley North</option>
+        <option>BVHS</option>
+        <option>BVJHE</option>
+        <option>Other</option>
       </select>
     </div>
     <div class="card">
@@ -1289,7 +1387,7 @@
     <div class="card">
       <div style="padding:10px 14px; background:var(--bg-surface); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
         <span style="font-size:13px; color:var(--text-muted);" id="inv-count">0 devices</span>
-        <button class="btn btn-danger btn-sm" onclick="clearLoaners()">Clear All</button>
+        <button class="btn btn-danger btn-sm" onclick="clearLoaners()">Archive All</button>
       </div>
       <table>
         <thead>
@@ -1380,7 +1478,7 @@
     <div class="card">
       <div style="padding:10px 14px; background:var(--bg-surface); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
         <span style="font-size:13px; color:var(--text-muted);" id="all-inv-count">0 devices</span>
-        <button id="all-inv-clear-btn" class="btn btn-danger btn-sm" onclick="clearAllInventory()">Clear All</button>
+        <button id="all-inv-clear-btn" class="btn btn-danger btn-sm" onclick="clearAllInventory()">Archive All</button>
       </div>
       <table>
         <thead>
@@ -1594,6 +1692,21 @@
   </div>
 </div>
 
+<div id="app-modal-backdrop" class="app-modal-backdrop" onclick="handleAppModalBackdrop(event)">
+  <div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="app-modal-title" onclick="event.stopPropagation()">
+    <div class="app-modal-header">
+      <div class="app-modal-title" id="app-modal-title">Confirm</div>
+    </div>
+    <div class="app-modal-body">
+      <div id="app-modal-message"></div>
+      <textarea id="app-modal-input" style="display:none"></textarea>
+    </div>
+    <div class="app-modal-actions">
+      <button class="btn btn-secondary" type="button" id="app-modal-cancel">Cancel</button>
+      <button class="btn btn-primary" type="button" id="app-modal-confirm">Continue</button>
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1621,6 +1734,11 @@ let selectedSchoolYear = '';
 const SCHOOL_YEAR_START_MONTH = 6; // July, zero-based month index.
 const selectedLoanerTags = new Set();
 const selectedAllInventoryTags = new Set();
+const pendingReturnIds = new Set();
+const pendingArchiveIds = new Set();
+const pendingDeviceActions = new Set();
+let appModalResolve = null;
+let toastTimer = null;
 
 // ── Repair parts staged for current checkout ─────────────────────────────────
 let stagedRepairParts = []; // [{partId, partName, qty}]
@@ -1682,6 +1800,76 @@ function csvCell(value) {
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function setCheckoutBuilding(button) {
+  const value = button?.dataset?.building || 'Other';
+  const input = document.getElementById('co-building');
+  if (input) input.value = value;
+  document.querySelectorAll('.building-pick').forEach(btn => btn.classList.remove('active'));
+  if (button) button.classList.add('active');
+}
+
+function openAppModal(options = {}) {
+  return new Promise(resolve => {
+    const backdrop = document.getElementById('app-modal-backdrop');
+    const title = document.getElementById('app-modal-title');
+    const message = document.getElementById('app-modal-message');
+    const input = document.getElementById('app-modal-input');
+    const cancel = document.getElementById('app-modal-cancel');
+    const confirm = document.getElementById('app-modal-confirm');
+    if (!backdrop || !title || !message || !input || !cancel || !confirm) {
+      resolve(options.prompt ? null : false);
+      return;
+    }
+
+    title.textContent = options.title || 'Confirm';
+    message.textContent = options.message || '';
+    input.style.display = options.prompt ? 'block' : 'none';
+    input.value = options.defaultValue || '';
+    input.placeholder = options.placeholder || '';
+    confirm.textContent = options.confirmText || 'Continue';
+    confirm.className = 'btn ' + (options.danger ? 'btn-danger' : 'btn-primary');
+    appModalResolve = resolve;
+    backdrop.dataset.prompt = options.prompt ? '1' : '0';
+    backdrop.classList.add('active');
+
+    const close = (value) => {
+      backdrop.classList.remove('active');
+      confirm.onclick = null;
+      cancel.onclick = null;
+      appModalResolve = null;
+      resolve(value);
+    };
+    cancel.onclick = () => close(options.prompt ? null : false);
+    confirm.onclick = () => close(options.prompt ? input.value : true);
+    setTimeout(() => (options.prompt ? input : confirm).focus(), 0);
+  });
+}
+
+function handleAppModalBackdrop(event) {
+  if (event.target.id !== 'app-modal-backdrop' || !appModalResolve) return;
+  document.getElementById('app-modal-backdrop')?.classList.remove('active');
+  const resolve = appModalResolve;
+  const isPrompt = event.target.dataset.prompt === '1';
+  appModalResolve = null;
+  resolve(isPrompt ? null : false);
+}
+
+function appConfirm(title, message, options = {}) {
+  return openAppModal({ title, message, confirmText: options.confirmText || 'Continue', danger: options.danger });
+}
+
+function appPrompt(title, message, options = {}) {
+  return openAppModal({
+    title,
+    message,
+    prompt: true,
+    defaultValue: options.defaultValue || '',
+    placeholder: options.placeholder || '',
+    confirmText: options.confirmText || 'Save',
+    danger: options.danger
+  });
 }
 
 function shouldRetryApiError(err, attempt, maxAttempts) {
@@ -1934,7 +2122,7 @@ function schoolYearLabel(value) {
 
 function getSchoolYearOptions() {
   const years = new Set([getSchoolYearValue(new Date())]);
-  checkouts.forEach(c => {
+  checkouts.filter(c => !isArchivedCheckout(c)).forEach(c => {
     const year = getSchoolYearValue(c.date);
     if (year) years.add(year);
   });
@@ -1964,8 +2152,25 @@ function matchesSelectedSchoolYear(checkout) {
   return !selectedSchoolYear || getSchoolYearValue(checkout.date) === selectedSchoolYear;
 }
 
+function isArchivedCheckout(checkout) {
+  return checkout?.status === 'Archived' || Boolean(checkout?.archivedAt);
+}
+
 function getSchoolYearCheckouts() {
-  return selectedSchoolYear ? checkouts.filter(matchesSelectedSchoolYear) : checkouts;
+  const visible = checkouts.filter(c => !isArchivedCheckout(c));
+  return selectedSchoolYear ? visible.filter(matchesSelectedSchoolYear) : visible;
+}
+
+function checkoutBuildingGroup(building) {
+  const value = String(building || '').trim();
+  if (!value) return '';
+  if (value === 'BVHS' || value === 'Bureau Valley High School') return 'BVHS';
+  if (value === 'BVJHE' || value === 'Bureau Valley Elementary and Junior High') return 'BVJHE';
+  return 'Other';
+}
+
+function displayCheckoutBuilding(building) {
+  return checkoutBuildingGroup(building) || '-';
 }
 
 function deviceHistoryLink(assetTag, label) {
@@ -1993,6 +2198,7 @@ function badgeHtml(type) {
 function statusBadge(s) {
   if (s === 'Active')   return `<span class="badge badge-active">Active</span>`;
   if (s === 'Returned') return `<span class="badge badge-returned">Returned</span>`;
+  if (s === 'Archived') return `<span class="badge" style="background:var(--neutral-light);color:var(--neutral);">Archived</span>`;
   return `<span class="badge badge-returned">${escapeHtml(s)}</span>`;
 }
 
@@ -2066,7 +2272,7 @@ function renderDashboard() {
   const tbody = document.getElementById('dashboard-tbody');
   if (!tbody) return;
   let active = getSchoolYearCheckouts().filter(c => c.status === 'Active');
-  if (dashboardBuilding) active = active.filter(c => c.building === dashboardBuilding);
+  if (dashboardBuilding) active = active.filter(c => checkoutBuildingGroup(c.building) === dashboardBuilding);
   active = active.slice(-10).reverse();
 
   if (!active.length) {
@@ -2075,7 +2281,7 @@ function renderDashboard() {
   }
   tbody.innerHTML = active.map(c => `
     <tr>
-      <td>${studentHistoryLink(c.studentName)}<br><span style="font-size:11px;color:var(--text-muted)">${escapeHtml(c.building||'')}</span></td>
+      <td>${studentHistoryLink(c.studentName)}<br><span style="font-size:11px;color:var(--text-muted)">${escapeHtml(displayCheckoutBuilding(c.building))}</span></td>
       <td>${deviceHistoryLink(c.assetTag)}</td>
       <td>${badgeHtml(c.type)}</td>
       <td style="font-size:13px;color:var(--text-muted)">${escapeHtml(formatDueDate(c.due) || '-')}</td>
@@ -2128,7 +2334,7 @@ function renderIncidents() {
     const matchText     = !search || [c.studentName, c.assetTag, c.serial, c.studentId].some(v => v && v.toLowerCase().includes(search));
     const matchType     = !filter || c.type === filter;
     const matchStatus   = !statusF || c.status === statusF;
-    const matchBuilding = !buildingF || c.building === buildingF;
+    const matchBuilding = !buildingF || checkoutBuildingGroup(c.building) === buildingF;
     return matchText && matchType && matchStatus && matchBuilding;
   });
 
@@ -2169,7 +2375,7 @@ function renderIncidents() {
   tbody.innerHTML = rows.map(c => `
     <tr>
       <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(c.id)}</td>
-      <td>${studentHistoryLink(c.studentName)}<br><span style="font-size:11px;color:var(--text-muted)">${escapeHtml(c.building||'')}</span></td>
+      <td>${studentHistoryLink(c.studentName)}<br><span style="font-size:11px;color:var(--text-muted)">${escapeHtml(displayCheckoutBuilding(c.building))}</span></td>
       <td>${deviceHistoryLink(c.assetTag)}</td>
       <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(c.serial||'-')}</td>
       <td>${badgeHtml(c.type)}</td>
@@ -2180,7 +2386,7 @@ function renderIncidents() {
       <td>
         <div class="actions">
           ${c.status === 'Active' ? `<button class="btn btn-success btn-sm" onclick="returnDevice(${c.id})">Return</button>` : ''}
-          <button class="btn btn-danger btn-sm" onclick="deleteRecord(${c.id})">✕</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteRecord(${c.id})">Archive</button>
         </div>
       </td>
     </tr>`).join('');
@@ -2194,8 +2400,8 @@ function getOverdueRows() {
   return getSchoolYearCheckouts()
     .filter(isOverdue)
     .filter(c => {
-      const matchText = !search || [c.studentName, c.assetTag, c.serial, c.building].some(v => v && v.toLowerCase().includes(search));
-      const matchBuilding = !building || c.building === building;
+      const matchText = !search || [c.studentName, c.assetTag, c.serial, c.building, checkoutBuildingGroup(c.building)].some(v => v && v.toLowerCase().includes(search));
+      const matchBuilding = !building || checkoutBuildingGroup(c.building) === building;
       return matchText && matchBuilding;
     })
     .sort((a, b) => overdueDays(b) - overdueDays(a));
@@ -2216,7 +2422,7 @@ function renderOverdue() {
       <td>${studentHistoryLink(c.studentName)}<br><span style="font-size:11px;color:var(--text-muted)">${escapeHtml(c.type||'')}</span></td>
       <td>${deviceHistoryLink(c.assetTag)}</td>
       <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(c.serial||'-')}</td>
-      <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(c.building||'-')}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(displayCheckoutBuilding(c.building))}</td>
       <td style="font-size:12px">${escapeHtml(formatDueDate(c.due)||'-')}</td>
       <td><span class="days-out-badge alert">${overdueDays(c)}d</span></td>
       <td><div class="actions"><button class="btn btn-success btn-sm" onclick="returnDevice(${c.id})">Return</button></div></td>
@@ -2224,7 +2430,7 @@ function renderOverdue() {
 }
 
 function getBuildingNames() {
-  return ['Bureau Valley High School','Bureau Valley Elementary and Junior High','Bureau Valley Elementary-Wyanet','Bureau Valley North'];
+  return ['BVHS','BVJHE','Other'];
 }
 
 function mostCommonValue(values) {
@@ -2237,9 +2443,9 @@ function getReportRows() {
   const yearCheckouts = getSchoolYearCheckouts();
   const buildings = getBuildingNames();
   return buildings.map(building => {
-    const checkoutRows = yearCheckouts.filter(c => c.building === building);
-    const loanerRows = inventory.filter(d => d.building === building);
-    const allRows = allInventory.filter(d => d.building === building);
+    const checkoutRows = yearCheckouts.filter(c => checkoutBuildingGroup(c.building) === building);
+    const loanerRows = inventory.filter(d => checkoutBuildingGroup(d.building) === building);
+    const allRows = allInventory.filter(d => checkoutBuildingGroup(d.building) === building);
     return {
       building,
       checkouts: checkoutRows.length,
@@ -2257,7 +2463,7 @@ function getTopStudentRows(limit = 8) {
     const name = c.studentName || 'Unknown';
     if (!grouped[name]) grouped[name] = { name, count: 0, buildings: [] };
     grouped[name].count++;
-    grouped[name].buildings.push(c.building || '');
+    grouped[name].buildings.push(displayCheckoutBuilding(c.building));
   });
   return Object.values(grouped)
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
@@ -2353,7 +2559,7 @@ function openDeviceHistory(assetTag) {
         ${rows.length ? rows.map(c => `
           <tr>
             <td style="font-size:12px">${escapeHtml(formatDate(c.date))}</td>
-            <td>${escapeHtml(c.studentName || '-')}<br><span style="font-size:11px;color:var(--text-muted);">${escapeHtml(c.building || '')}</span></td>
+            <td>${escapeHtml(c.studentName || '-')}<br><span style="font-size:11px;color:var(--text-muted);">${escapeHtml(displayCheckoutBuilding(c.building))}</span></td>
             <td>${badgeHtml(c.originalAssetTag === assetTag && c.assetTag !== assetTag ? 'Needs Repair' : c.type)}</td>
             <td>${statusBadge(c.status)}</td>
             <td style="font-size:12px">${escapeHtml(formatDueDate(c.due) || '-')}</td>
@@ -2390,7 +2596,7 @@ function openStudentHistory(studentName) {
   const repairCount = rows.filter(c => c.type === 'Needs Repair').length;
   const forgotCount = rows.filter(c => c.type === 'Forgot Device').length;
   const lostCount = rows.filter(c => c.type === 'Lost').length;
-  const building = mostCommonValue(rows.map(c => c.building || ''));
+  const building = mostCommonValue(rows.map(c => displayCheckoutBuilding(c.building)));
   const lastSeen = rows.length ? formatDate(rows[0].date) : 'No checkout records';
 
   title.textContent = studentName || 'Student History';
@@ -2489,13 +2695,17 @@ function clearAllInventorySelection() {
   renderAllInventory();
 }
 
-function applyBulkStatus(records, selectedSet, status, restoreStatus) {
+async function applyBulkStatus(records, selectedSet, status, restoreStatus, store) {
   if (!status) { showToast('Choose a status first.', 'error'); return 0; }
   const selected = records.filter(d => selectedSet.has(d.assetTag));
   if (!selected.length) { showToast('Select at least one device first.', 'error'); return 0; }
   let details = {};
   if (status === 'Retired') {
-    const reason = prompt(`Retirement reason for ${selected.length} selected device${selected.length !== 1 ? 's' : ''}:`, '');
+    const reason = await appPrompt(
+      'Retirement reason',
+      `Reason for ${selected.length.toLocaleString()} selected device${selected.length !== 1 ? 's' : ''}:`,
+      { placeholder: 'Broken, obsolete, missing, parts only...', danger: true }
+    );
     if (reason === null) return 0;
     const cleanReason = reason.trim();
     if (!cleanReason) { showToast('Retirement reason is required.', 'error'); return 0; }
@@ -2503,30 +2713,34 @@ function applyBulkStatus(records, selectedSet, status, restoreStatus) {
   }
   selected.forEach(d => {
     d.status = status;
-    if (status === 'Retired') {
-      d.retiredDate = details.retiredDate;
-      d.retirementReason = details.retirementReason;
-    } else if (restoreStatus || d.status !== 'Retired') {
-      d.retiredDate = '';
-      d.retirementReason = '';
+    applyRetirementFields(d, status, details);
+    const match = store === 'loaner' ? findAllInventoryDevice(d.assetTag) : findLoanerDevice(d.assetTag);
+    if (match) {
+      const pairedStatus = status === 'Retired'
+        ? 'Retired'
+        : store === 'loaner'
+          ? (status === 'Available' ? 'Loaner' : status)
+          : (status === 'Unassigned' ? 'Available' : status);
+      match.status = pairedStatus;
+      applyRetirementFields(match, pairedStatus, details);
     }
   });
   return selected.length;
 }
 
-function applyBulkLoanerStatus() {
+async function applyBulkLoanerStatus() {
   const status = document.getElementById('loaner-bulk-status')?.value || '';
-  const changed = applyBulkStatus(inventory, selectedLoanerTags, status, status !== 'Retired');
+  const changed = await applyBulkStatus(inventory, selectedLoanerTags, status, status !== 'Retired', 'loaner');
   if (!changed) return;
-  save(); refreshAll(); syncInventoryToSheet();
+  save(); refreshAll(); Promise.all([syncInventoryToSheet(), syncAllInventoryToSheet()]);
   showToast(`${changed.toLocaleString()} loaner device${changed !== 1 ? 's' : ''} updated.`, 'success');
 }
 
-function applyBulkAllInventoryStatus() {
+async function applyBulkAllInventoryStatus() {
   const status = document.getElementById('all-inv-bulk-status')?.value || '';
-  const changed = applyBulkStatus(allInventory, selectedAllInventoryTags, status, status !== 'Retired');
+  const changed = await applyBulkStatus(allInventory, selectedAllInventoryTags, status, status !== 'Retired', 'all');
   if (!changed) return;
-  save(); refreshAll(); syncAllInventoryToSheet();
+  save(); refreshAll(); Promise.all([syncAllInventoryToSheet(), syncInventoryToSheet()]);
   showToast(`${changed.toLocaleString()} inventory device${changed !== 1 ? 's' : ''} updated.`, 'success');
 }
 
@@ -2583,7 +2797,7 @@ function renderLoaners() {
       <td class="editable" data-store="loaner" data-field="status" data-key="${escapeHtml(d.assetTag)}" data-type="select" data-options="status-loaner" onclick="startCellEdit(this)">
         ${loanerStatusBadge(d.status)}${retirementInfoHtml(d)}<span class="edit-hint">✎</span>
       </td>
-      <td><div class="actions">${loanerLifecycleButton(d)}<button class="btn btn-danger btn-sm" onclick="removeDevice('${jsStringAttr(d.assetTag)}')">Remove</button></div></td>
+      <td><div class="actions">${loanerLifecycleButton(d)}<button class="btn btn-danger btn-sm" onclick="removeDevice('${jsStringAttr(d.assetTag)}')">Archive</button></div></td>
     </tr>`).join('');
 
   if (rows.length > 200) {
@@ -2605,7 +2819,7 @@ function renderAllInventory() {
   const building = document.getElementById('all-inv-building-filter')?.value || '';
   const isFiltered = search || filter || building;
   const clearBtn = document.getElementById('all-inv-clear-btn');
-  if (clearBtn) clearBtn.textContent = isFiltered ? `Delete Filtered (${rows.length.toLocaleString()})` : `Clear All (${allInventory.length.toLocaleString()})`;
+  if (clearBtn) clearBtn.textContent = isFiltered ? `Archive Filtered (${rows.length.toLocaleString()})` : `Archive All (${allInventory.length.toLocaleString()})`;
   updateBulkCounts();
 
   if (!rows.length) {
@@ -2636,7 +2850,7 @@ function renderAllInventory() {
       <td class="editable" data-store="all" data-field="status" data-key="${escapeHtml(d.assetTag)}" data-type="select" data-options="status-all" onclick="startCellEdit(this)">
         <span class="badge ${statusCls}">${escapeHtml(d.status)}</span>${retirementInfoHtml(d)}<span class="edit-hint">✎</span>
       </td>
-      <td><div class="actions">${allInventoryLifecycleButton(d)}<button class="btn btn-danger btn-sm" onclick="removeAllInvDevice('${jsStringAttr(d.assetTag)}')">Delete</button></div></td>
+      <td><div class="actions">${allInventoryLifecycleButton(d)}<button class="btn btn-danger btn-sm" onclick="removeAllInvDevice('${jsStringAttr(d.assetTag)}')">Archive</button></div></td>
     </tr>`;
   }).join('');
 
@@ -2696,6 +2910,56 @@ function autoFillSerial() {
 }
 
 // ─── NEW: Recent students quick-pick ─────────────────────────────────────────
+
+function allInventoryStatusForCheckoutType(type) {
+  if (type === 'Forgot Device') return 'Forgot Device';
+  if (type === 'Needs Repair') return 'Needs Repair';
+  if (type === 'Daily Loaner') return 'Daily Loaner';
+  return 'Loaner';
+}
+
+function findLoanerDevice(assetTag) {
+  return inventory.find(d => d.assetTag === assetTag);
+}
+
+function findAllInventoryDevice(assetTag) {
+  return allInventory.find(d => d.assetTag === assetTag);
+}
+
+function applyRetirementFields(device, status, details = {}) {
+  if (!device) return;
+  if (status === 'Retired') {
+    device.retiredDate = details.retiredDate || device.retiredDate || new Date().toString();
+    device.retirementReason = details.retirementReason || device.retirementReason || '';
+  } else {
+    device.retiredDate = '';
+    device.retirementReason = '';
+  }
+}
+
+function syncMatchingDeviceStatus(assetTag, loanerStatus, allStatus, details = {}) {
+  const dev = findLoanerDevice(assetTag);
+  const full = findAllInventoryDevice(assetTag);
+  if (dev && (dev.status !== 'Retired' || loanerStatus === 'Retired')) {
+    dev.status = loanerStatus;
+    applyRetirementFields(dev, loanerStatus, details);
+  }
+  if (full && (full.status !== 'Retired' || allStatus === 'Retired')) {
+    full.status = allStatus;
+    applyRetirementFields(full, allStatus, details);
+  }
+}
+
+async function syncDeviceRecordsForAsset(assetTag) {
+  const tasks = [];
+  const dev = findLoanerDevice(assetTag);
+  const full = findAllInventoryDevice(assetTag);
+  if (dev) tasks.push(upsertDeviceToSheet(dev));
+  if (full) tasks.push(upsertAllDeviceToSheet(full));
+  if (!tasks.length) return true;
+  const results = await Promise.all(tasks);
+  return results.every(result => result !== false);
+}
 
 const RECENT_STUDENTS_KEY = 'recentStudents';
 const MAX_RECENT = 10;
@@ -2836,8 +3100,8 @@ async function submitCheckout() {
     return;
   }
 
-  const dev = inventory.find(d => d.assetTag === asset);
-  const fullInvDev = allInventory.find(d => d.assetTag === asset);
+  const dev = findLoanerDevice(asset);
+  const fullInvDev = findAllInventoryDevice(asset);
   if ((dev && dev.status === 'Retired') || (fullInvDev && fullInvDev.status === 'Retired')) {
     setCheckoutSubmitting(false);
     showToast('That device is retired. Restore it before checking it out.', 'error');
@@ -2852,7 +3116,9 @@ async function submitCheckout() {
 
   checkouts.push(record);
 
-  if (dev) dev.status = 'On Loan';
+  if (dev || fullInvDev) {
+    syncMatchingDeviceStatus(asset, 'On Loan', allInventoryStatusForCheckoutType(type));
+  }
 
   // Commit staged repair parts if any
   if (type === 'Needs Repair') commitRepairParts();
@@ -2867,7 +3133,7 @@ async function submitCheckout() {
   setCheckoutSubmitting(false);
 
   const syncs = [sendToSheet(record)];
-  if (dev) syncs.push(upsertDeviceToSheet(dev));
+  if (dev || fullInvDev) syncs.push(syncDeviceRecordsForAsset(asset));
   Promise.all(syncs).then((results) => {
     const checkoutSynced = results[0];
     showToast(checkoutSynced === false ? 'Saved locally. Sheet sync failed.' : 'Checkout saved!', checkoutSynced === false ? 'error' : 'success');
@@ -2880,26 +3146,56 @@ async function submitCheckout() {
 }
 
 async function returnDevice(id) {
+  if (pendingReturnIds.has(String(id))) return;
   const rec = checkouts.find(c => c.id === id);
   if (!rec) return;
+  pendingReturnIds.add(String(id));
   rec.status = 'Returned';
   rec.returnDate = new Date().toString();
-  const dev = inventory.find(d => d.assetTag === rec.assetTag);
-  if (dev) dev.status = 'Available';
+  syncMatchingDeviceStatus(rec.assetTag, 'Available', 'Loaner');
   save();
   refreshAll();
-  const returnSynced = await sendReturnToSheet(rec);
-  if (dev) await upsertDeviceToSheet(dev);
-  showToast(returnSynced === false ? 'Returned locally. Sheet sync failed.' : 'Device marked as returned.', returnSynced === false ? 'error' : 'success');
+  showToast('Return saved. Syncing...', 'success');
+  Promise.all([sendReturnToSheet(rec), syncDeviceRecordsForAsset(rec.assetTag)])
+    .then(results => {
+      const synced = results.every(result => result !== false);
+      showToast(synced ? 'Device marked as returned.' : 'Returned locally. Sheet sync failed.', synced ? 'success' : 'error');
+    })
+    .catch(err => {
+      console.error('Return sync failed:', err);
+      showToast('Returned locally. Sheet sync failed.', 'error');
+    })
+    .finally(() => pendingReturnIds.delete(String(id)));
 }
 
-function deleteRecord(id) {
-  if (!confirm('Delete this record?')) return;
-  checkouts = checkouts.filter(c => c.id !== id);
+async function deleteRecord(id) {
+  if (pendingArchiveIds.has(String(id))) return;
+  const rec = checkouts.find(c => c.id === id);
+  if (!rec) return;
+  const ok = await appConfirm('Archive checkout record', 'This hides the record from reports and active views, but keeps it recoverable.', { confirmText: 'Archive', danger: true });
+  if (!ok) return;
+  pendingArchiveIds.add(String(id));
+  const previous = { ...rec };
+  rec.status = 'Archived';
+  rec.archivedAt = new Date().toString();
   save();
   refreshAll();
-  deleteCheckoutFromSheet(id);
-  showToast('Record deleted.');
+  showToast('Record archived.', 'success', {
+    label: 'Undo',
+    onClick: () => {
+      Object.keys(rec).forEach(key => delete rec[key]);
+      Object.assign(rec, previous);
+      save();
+      refreshAll();
+      restoreCheckoutOnSheet(rec);
+      showToast('Record restored.', 'success');
+    }
+  });
+  archiveCheckoutFromSheet(id, rec.archivedAt)
+    .then(synced => {
+      if (synced === false) showToast('Archived locally. Sheet sync failed.', 'error');
+    })
+    .finally(() => pendingArchiveIds.delete(String(id)));
 }
 
 function addDevice() {
@@ -2920,11 +3216,12 @@ function addDevice() {
   showToast('Device added!', 'success');
 }
 
-function getRetirementDetails(device) {
+async function getRetirementDetails(device) {
   const current = device.retirementReason ? `\n\nCurrent reason: ${device.retirementReason}` : '';
-  const reason = prompt(
-    `Why is ${device.assetTag} being retired?\n\nExamples: Broken, Obsolete, Missing, Parts only, Recycled, Other${current}`,
-    device.retirementReason || ''
+  const reason = await appPrompt(
+    'Retirement reason',
+    `Why is ${device.assetTag} being retired? Examples: Broken, Obsolete, Missing, Parts only, Recycled, Other${current}`,
+    { defaultValue: device.retirementReason || '', danger: true }
   );
   if (reason === null) return null;
   const cleanReason = reason.trim();
@@ -2938,24 +3235,21 @@ function getRetirementDetails(device) {
 function setLoanerDeviceStatus(tag, status, message, details = {}) {
   const dev = inventory.find(d => d.assetTag === tag);
   if (!dev) return;
-  dev.status = status;
-  if (status === 'Retired') {
-    dev.retiredDate = details.retiredDate || dev.retiredDate || new Date().toString();
-    dev.retirementReason = details.retirementReason || dev.retirementReason || '';
-  } else {
-    dev.retiredDate = '';
-    dev.retirementReason = '';
-  }
+  const allStatus = status === 'Available' ? 'Loaner' : status;
+  syncMatchingDeviceStatus(tag, status, allStatus, details);
   save(); refreshAll();
-  upsertDeviceToSheet(dev);
+  syncDeviceRecordsForAsset(tag);
   showToast(message, 'success');
 }
 
-function retireLoanerDevice(tag) {
+async function retireLoanerDevice(tag) {
   const dev = inventory.find(d => d.assetTag === tag);
   if (!dev) return;
-  if (dev.status === 'On Loan' && !confirm('This device is currently marked On Loan. Retire it anyway?')) return;
-  const details = getRetirementDetails(dev);
+  if (dev.status === 'On Loan') {
+    const ok = await appConfirm('Retire checked-out device', 'This device is currently marked On Loan. Retire it anyway?', { confirmText: 'Retire', danger: true });
+    if (!ok) return;
+  }
+  const details = await getRetirementDetails(dev);
   if (!details) return;
   setLoanerDeviceStatus(tag, 'Retired', 'Device retired.', details);
 }
@@ -2964,12 +3258,33 @@ function restoreLoanerDevice(tag) {
   setLoanerDeviceStatus(tag, 'Available', 'Device restored to available.');
 }
 
-function removeDevice(tag) {
-  if (!confirm('Remove device ' + tag + '?')) return;
-  inventory = inventory.filter(d => d.assetTag !== tag);
-  save(); renderLoaners(); renderStats();
-  deleteDeviceFromSheet(tag);
-  showToast('Device removed.');
+async function removeDevice(tag) {
+  if (pendingDeviceActions.has('loaner:' + tag)) return;
+  const dev = inventory.find(d => d.assetTag === tag);
+  if (!dev) return;
+  const ok = await appConfirm('Archive loaner device', `Archive device ${tag}? It will be marked Retired instead of deleted.`, { confirmText: 'Archive', danger: true });
+  if (!ok) return;
+  pendingDeviceActions.add('loaner:' + tag);
+  const previousLoaner = { ...dev };
+  const full = findAllInventoryDevice(tag);
+  const previousFull = full ? { ...full } : null;
+  const details = { retiredDate: new Date().toString(), retirementReason: 'Archived from app' };
+  syncMatchingDeviceStatus(tag, 'Retired', 'Retired', details);
+  save(); refreshAll();
+  showToast('Device archived.', 'success', {
+    label: 'Undo',
+    onClick: () => {
+      Object.assign(dev, previousLoaner);
+      if (full && previousFull) Object.assign(full, previousFull);
+      save(); refreshAll(); syncDeviceRecordsForAsset(tag);
+      showToast('Device restored.', 'success');
+    }
+  });
+  syncDeviceRecordsForAsset(tag)
+    .then(synced => {
+      if (synced === false) showToast('Archived locally. Sheet sync failed.', 'error');
+    })
+    .finally(() => pendingDeviceActions.delete('loaner:' + tag));
 }
 
 function importLoanerCSV(event)      { importFromCSV(event, 'loaner'); }
@@ -2981,7 +3296,7 @@ function importFromCSV(event, target) {
   showBanner(target, 'Reading file...', 'success');
   const reader = new FileReader();
   reader.onerror = function() { showBanner(target, 'Error reading file. Please try again.', 'error'); };
-  reader.onload = function(e) {
+  reader.onload = async function(e) {
     try {
       const lines = e.target.result.split('\n').filter(l => l.trim());
       if (lines.length < 2) { showBanner(target, 'File appears empty.', 'error'); return; }
@@ -3075,7 +3390,8 @@ function importFromCSV(event, target) {
         showBanner(target, `Import preview: no new devices or status changes found.${dupes ? ' ' + dupes + ' duplicates skipped.' : ''}${skipped ? ' ' + skipped + ' blank rows skipped.' : ''}`, 'success');
         return;
       }
-      if (!confirm(preview)) {
+      const ok = await appConfirm('Review import', preview, { confirmText: 'Import' });
+      if (!ok) {
         showBanner(target, 'Import canceled. No changes were saved.', 'success');
         return;
       }
@@ -3121,13 +3437,34 @@ function showBannerFor(statusId, textId, msg, type) {
   setTimeout(() => { el.style.display = 'none'; }, 6000);
 }
 
+function syncImportedIncidentRecords(records) {
+  Promise.all(records.map(async record => {
+    const saved = await sendToSheet(record);
+    if (record.status === 'Returned') {
+      await sendReturnToSheet(record);
+    }
+    return saved;
+  })).then(results => {
+    const synced = results.every(result => result !== false);
+    showBannerFor(
+      'incident-import-status',
+      'incident-import-text',
+      synced ? 'Incident import synced to Sheet.' : 'Import saved locally. Some Sheet syncs failed.',
+      synced ? 'success' : 'error'
+    );
+  }).catch(err => {
+    console.error('Incident import sync failed:', err);
+    showBannerFor('incident-import-status', 'incident-import-text', 'Import saved locally. Sheet sync failed.', 'error');
+  });
+}
+
 function importIncidentsCSV(event) {
   const file = event.target.files[0];
   if (!file) return;
   showBannerFor('incident-import-status', 'incident-import-text', 'Reading file...', 'success');
   const reader = new FileReader();
   reader.onerror = () => showBannerFor('incident-import-status', 'incident-import-text', 'Error reading file.', 'error');
-  reader.onload = function(e) {
+  reader.onload = async function(e) {
     try {
       const lines = e.target.result.split('\n').filter(l => l.trim());
       if (lines.length < 2) { showBannerFor('incident-import-status', 'incident-import-text', 'File appears empty.', 'error'); return; }
@@ -3145,6 +3482,7 @@ function importIncidentsCSV(event) {
         date        : header.findIndex(h => /^date|checkout/i.test(h)),
         due         : header.findIndex(h => /due/i.test(h)),
         status      : header.findIndex(h => /^status$/i.test(h)),
+        returnDate  : header.findIndex(h => /return/i.test(h)),
         notes       : header.findIndex(h => /notes/i.test(h)),
       };
       if (idx.studentName === -1 && idx.assetTag === -1) {
@@ -3163,6 +3501,7 @@ function importIncidentsCSV(event) {
       function col(cols, i) { return (i !== -1 && cols[i] !== undefined) ? cols[i].trim() : ''; }
       const existingIds = new Set(checkouts.map(c => String(c.id)));
       let added = 0, dupes = 0, skipped = 0;
+      const imported = [];
       const today = new Date().toString();
       for (let i = 1; i < lines.length; i++) {
         const cols = parseRow(lines[i]);
@@ -3172,18 +3511,23 @@ function importIncidentsCSV(event) {
         const csvId = col(cols, idx.id);
         if (csvId && existingIds.has(csvId)) { dupes++; continue; }
         const newId = csvId ? parseInt(csvId, 10) : nextId++;
+        const rawStatus = col(cols, idx.status);
+        const status = rawStatus === 'Returned' ? 'Returned' : 'Active';
         const record = {
           id: newId, studentName: studentName || 'Unknown', grade: col(cols, idx.grade),
           building: col(cols, idx.building), assetTag, serial: col(cols, idx.serial),
           type: col(cols, idx.type) || 'Forgot Device', damagedPart: col(cols, idx.damagedPart),
           originalAssetTag: col(cols, idx.origAsset), date: col(cols, idx.date) || today,
-          due: col(cols, idx.due), status: col(cols, idx.status) || 'Active', notes: col(cols, idx.notes),
+          due: col(cols, idx.due), status, returnDate: col(cols, idx.returnDate), notes: col(cols, idx.notes),
         };
-        checkouts.push(record); existingIds.add(String(newId)); added++;
+        checkouts.push(record); imported.push(record); existingIds.add(String(newId)); added++;
       }
       save(); refreshAll();
+      if (imported.length) {
+        syncImportedIncidentRecords(imported);
+      }
       showBannerFor('incident-import-status', 'incident-import-text',
-        `✓ Imported ${added} incident${added !== 1 ? 's' : ''}.${dupes ? ' ' + dupes + ' duplicates skipped.' : ''}${skipped ? ' ' + skipped + ' blank rows skipped.' : ''}`, 'success');
+        `✓ Imported ${added} incident${added !== 1 ? 's' : ''}.${dupes ? ' ' + dupes + ' duplicates skipped.' : ''}${skipped ? ' ' + skipped + ' blank rows skipped.' : ''} Syncing to Sheet...`, 'success');
     } catch(err) {
       showBannerFor('incident-import-status', 'incident-import-text', 'Import failed: ' + err.message, 'error');
     }
@@ -3251,39 +3595,79 @@ function importPartsCSV(event) {
   reader.readAsText(file);
 }
 
-function clearLoaners() {
-  if (!confirm(`Clear all ${inventory.length.toLocaleString()} loaner devices? This cannot be undone.`)) return;
-  inventory = []; save(); refreshAll(); syncInventoryToSheet();
-  showToast('Loaner devices cleared.');
+async function clearLoaners() {
+  if (!inventory.length) { showToast('No loaner devices to archive.'); return; }
+  const ok = await appConfirm('Archive all loaner devices', `Archive all ${inventory.length.toLocaleString()} loaner devices? They will be marked Retired instead of deleted.`, { confirmText: 'Archive All', danger: true });
+  if (!ok) return;
+  const previousLoaners = inventory.map(d => ({ ...d }));
+  const previousAll = allInventory.map(d => ({ ...d }));
+  const details = { retiredDate: new Date().toString(), retirementReason: 'Bulk archived from app' };
+  inventory.forEach(d => {
+    d.status = 'Retired';
+    applyRetirementFields(d, 'Retired', details);
+    const full = findAllInventoryDevice(d.assetTag);
+    if (full) {
+      full.status = 'Retired';
+      applyRetirementFields(full, 'Retired', details);
+    }
+  });
+  save(); refreshAll();
+  Promise.all([syncInventoryToSheet(), syncAllInventoryToSheet()]);
+  showToast('Loaner devices archived.', 'success', {
+    label: 'Undo',
+    onClick: () => {
+      inventory = previousLoaners;
+      allInventory = previousAll;
+      save(); refreshAll();
+      Promise.all([syncInventoryToSheet(), syncAllInventoryToSheet()]);
+      showToast('Loaner archive undone.', 'success');
+    }
+  });
 }
 
-function removeAllInvDevice(tag) {
-  if (!confirm('Delete device ' + tag + ' from inventory?')) return;
-  allInventory = allInventory.filter(d => d.assetTag !== tag);
-  save(); renderAllInventory(); deleteAllDeviceFromSheet(tag);
-  showToast('Device deleted.');
+async function removeAllInvDevice(tag) {
+  if (pendingDeviceActions.has('all:' + tag)) return;
+  const dev = allInventory.find(d => d.assetTag === tag);
+  if (!dev) return;
+  const ok = await appConfirm('Archive inventory device', `Archive device ${tag}? It will be marked Retired instead of deleted.`, { confirmText: 'Archive', danger: true });
+  if (!ok) return;
+  pendingDeviceActions.add('all:' + tag);
+  const previousFull = { ...dev };
+  const loaner = findLoanerDevice(tag);
+  const previousLoaner = loaner ? { ...loaner } : null;
+  const details = { retiredDate: new Date().toString(), retirementReason: 'Archived from app' };
+  syncMatchingDeviceStatus(tag, 'Retired', 'Retired', details);
+  save(); refreshAll();
+  showToast('Device archived.', 'success', {
+    label: 'Undo',
+    onClick: () => {
+      Object.assign(dev, previousFull);
+      if (loaner && previousLoaner) Object.assign(loaner, previousLoaner);
+      save(); refreshAll(); syncDeviceRecordsForAsset(tag);
+      showToast('Device restored.', 'success');
+    }
+  });
+  syncDeviceRecordsForAsset(tag)
+    .then(synced => {
+      if (synced === false) showToast('Archived locally. Sheet sync failed.', 'error');
+    })
+    .finally(() => pendingDeviceActions.delete('all:' + tag));
 }
 
 function setAllInvDeviceStatus(tag, status, message, details = {}) {
   const dev = allInventory.find(d => d.assetTag === tag);
   if (!dev) return;
-  dev.status = status;
-  if (status === 'Retired') {
-    dev.retiredDate = details.retiredDate || dev.retiredDate || new Date().toString();
-    dev.retirementReason = details.retirementReason || dev.retirementReason || '';
-  } else {
-    dev.retiredDate = '';
-    dev.retirementReason = '';
-  }
+  const loanerStatus = status === 'Unassigned' || status === 'Loaner' ? 'Available' : status;
+  syncMatchingDeviceStatus(tag, loanerStatus, status, details);
   save(); refreshAll();
-  upsertAllDeviceToSheet(dev);
+  syncDeviceRecordsForAsset(tag);
   showToast(message, 'success');
 }
 
-function retireAllInvDevice(tag) {
+async function retireAllInvDevice(tag) {
   const dev = allInventory.find(d => d.assetTag === tag);
   if (!dev) return;
-  const details = getRetirementDetails(dev);
+  const details = await getRetirementDetails(dev);
   if (!details) return;
   setAllInvDeviceStatus(tag, 'Retired', 'Device retired.', details);
 }
@@ -3292,7 +3676,7 @@ function restoreAllInvDevice(tag) {
   setAllInvDeviceStatus(tag, 'Unassigned', 'Device restored to unassigned.');
 }
 
-function clearAllInventory() {
+async function clearAllInventory() {
   const search   = (document.getElementById('all-inv-search')?.value || '').toLowerCase();
   const filter   = document.getElementById('all-inv-status-filter')?.value || '';
   const building = document.getElementById('all-inv-building-filter')?.value || '';
@@ -3304,13 +3688,34 @@ function clearAllInventory() {
   );
   if (!toDelete.length) { showToast('Nothing to delete.'); return; }
   const msg = isFiltered
-    ? `Delete ${toDelete.length.toLocaleString()} filtered devices? This cannot be undone.`
-    : `Clear all ${allInventory.length.toLocaleString()} devices? This cannot be undone.`;
-  if (!confirm(msg)) return;
-  const deleteSet = new Set(toDelete.map(d => d.assetTag));
-  allInventory = allInventory.filter(d => !deleteSet.has(d.assetTag));
-  save(); refreshAll(); syncAllInventoryToSheet();
-  showToast(`${toDelete.length.toLocaleString()} devices deleted.`);
+    ? `Archive ${toDelete.length.toLocaleString()} filtered devices? They will be marked Retired instead of deleted.`
+    : `Archive all ${allInventory.length.toLocaleString()} devices? They will be marked Retired instead of deleted.`;
+  const ok = await appConfirm('Archive inventory devices', msg, { confirmText: 'Archive', danger: true });
+  if (!ok) return;
+  const previousAll = allInventory.map(d => ({ ...d }));
+  const previousLoaners = inventory.map(d => ({ ...d }));
+  const details = { retiredDate: new Date().toString(), retirementReason: 'Bulk archived from app' };
+  toDelete.forEach(d => {
+    d.status = 'Retired';
+    applyRetirementFields(d, 'Retired', details);
+    const loaner = findLoanerDevice(d.assetTag);
+    if (loaner) {
+      loaner.status = 'Retired';
+      applyRetirementFields(loaner, 'Retired', details);
+    }
+  });
+  save(); refreshAll();
+  Promise.all([syncAllInventoryToSheet(), syncInventoryToSheet()]);
+  showToast(`${toDelete.length.toLocaleString()} devices archived.`, 'success', {
+    label: 'Undo',
+    onClick: () => {
+      allInventory = previousAll;
+      inventory = previousLoaners;
+      save(); refreshAll();
+      Promise.all([syncAllInventoryToSheet(), syncInventoryToSheet()]);
+      showToast('Inventory archive undone.', 'success');
+    }
+  });
 }
 
 function openAddDevice() {
@@ -3324,7 +3729,9 @@ function clearCheckoutForm() {
     if (el) { el.value = ''; delete el.dataset.autoFilled; }
   });
   document.getElementById('co-grade').value    = '';
-  document.getElementById('co-building').value = '';
+  document.getElementById('co-building').value = 'BVHS';
+  const defaultBuilding = document.querySelector('.building-pick[data-building="BVHS"]');
+  if (defaultBuilding) setCheckoutBuilding(defaultBuilding);
   document.getElementById('co-type').value     = 'Forgot Device';
   document.getElementById('co-due').value      = getCheckoutDefaultDueDate('Forgot Device');
   document.getElementById('co-damaged-part').value = '';
@@ -3338,7 +3745,7 @@ function clearCheckoutForm() {
 function exportCSV() {
   const headers = ['ID','Student Name','Grade','Building','Asset Tag','Serial','Type','Damaged Part','Date','Due Back','Status','Notes'];
   const exportRows = getSchoolYearCheckouts();
-  const rows    = exportRows.map(c => [c.id, c.studentName, c.grade||'', c.building||'', c.assetTag, c.serial||'', c.type, c.damagedPart||'', c.date, c.due||'', c.status, c.notes||'']);
+  const rows    = exportRows.map(c => [c.id, c.studentName, c.grade||'', displayCheckoutBuilding(c.building), c.assetTag, c.serial||'', c.type, c.damagedPart||'', c.date, c.due||'', c.status, c.notes||'']);
   const csv     = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
@@ -3348,7 +3755,7 @@ function exportCSV() {
 
 function exportOverdueCSV() {
   const headers = ['ID','Student Name','Building','Asset Tag','Serial','Type','Due Back','Days Overdue','Notes'];
-  const rows = getOverdueRows().map(c => [c.id, c.studentName, c.building||'', c.assetTag, c.serial||'', c.type, c.due||'', overdueDays(c), c.notes||'']);
+  const rows = getOverdueRows().map(c => [c.id, c.studentName, displayCheckoutBuilding(c.building), c.assetTag, c.serial||'', c.type, c.due||'', overdueDays(c), c.notes||'']);
   const csv = [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
@@ -3434,6 +3841,16 @@ async function sendReturnToSheet(record) {
   return sheetPost({ action: 'return', id: record.id, returnDate: record.returnDate || '' });
 }
 
+async function archiveCheckoutFromSheet(id, archivedAt) {
+  if (SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return true;
+  return sheetPost({ action: 'archiveCheckout', id, archivedAt });
+}
+
+async function restoreCheckoutOnSheet(record) {
+  if (SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return true;
+  return sheetPost({ action: 'restoreCheckout', id: record.id, status: record.status || 'Active', returnDate: record.returnDate || '' });
+}
+
 async function sheetPost(payload, options = {}) {
   if (!SHEET_URL || SHEET_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') return true;
   try {
@@ -3446,16 +3863,16 @@ async function sheetPost(payload, options = {}) {
   }
 }
 
-async function upsertDeviceToSheet(device)      { await sheetPost({ action: 'upsertDevice',     device }); }
-async function deleteCheckoutFromSheet(id)      { await sheetPost({ action: 'deleteCheckout',   id }); }
-async function deleteDeviceFromSheet(assetTag)   { await sheetPost({ action: 'deleteDevice',     assetTag }); }
-async function syncInventoryToSheet()            { await sheetPost({ action: 'syncInventory',    devices: inventory }); }
-async function upsertAllDeviceToSheet(device)    { await sheetPost({ action: 'upsertAllDevice',  device }); }
-async function deleteAllDeviceFromSheet(assetTag){ await sheetPost({ action: 'deleteAllDevice',  assetTag }); }
-async function syncAllInventoryToSheet()         { await sheetPost({ action: 'syncAllInventory', devices: allInventory }); }
-async function upsertPartToSheet(part)           { await sheetPost({ action: 'upsertPart',       part }); }
-async function deletePartFromSheet(partId)       { await sheetPost({ action: 'deletePart',       partId }); }
-async function syncPartsToSheet()                { await sheetPost({ action: 'syncParts',        parts: partsInventory }); }
+async function upsertDeviceToSheet(device)      { return sheetPost({ action: 'upsertDevice',     device }); }
+async function deleteCheckoutFromSheet(id)      { return sheetPost({ action: 'deleteCheckout',   id }); }
+async function deleteDeviceFromSheet(assetTag)   { return sheetPost({ action: 'deleteDevice',     assetTag }); }
+async function syncInventoryToSheet()            { return sheetPost({ action: 'syncInventory',    devices: inventory }); }
+async function upsertAllDeviceToSheet(device)    { return sheetPost({ action: 'upsertAllDevice',  device }); }
+async function deleteAllDeviceFromSheet(assetTag){ return sheetPost({ action: 'deleteAllDevice',  assetTag }); }
+async function syncAllInventoryToSheet()         { return sheetPost({ action: 'syncAllInventory', devices: allInventory }); }
+async function upsertPartToSheet(part)           { return sheetPost({ action: 'upsertPart',       part }); }
+async function deletePartFromSheet(partId)       { return sheetPost({ action: 'deletePart',       partId }); }
+async function syncPartsToSheet()                { return sheetPost({ action: 'syncParts',        parts: partsInventory }); }
 
 // ─── Inline cell editing ──────────────────────────────────────────────────────
 
@@ -3497,12 +3914,12 @@ function startCellEdit(td, store, field, assetTag, inputType, options) {
   td.appendChild(editor); editor.focus();
   if (editor.tagName === 'INPUT') editor.select();
 
-  function commit() {
+  async function commit() {
     const newVal = editor.value;
     const oldTag = rec.assetTag;
     if (field === 'status' && newVal === 'Retired' && rec.status !== 'Retired') {
-      const details = getRetirementDetails(rec);
-      if (!details) return;
+      const details = await getRetirementDetails(rec);
+      if (!details) { cancel(); return; }
       rec.retiredDate = details.retiredDate;
       rec.retirementReason = details.retirementReason;
     } else if (field === 'status' && newVal !== 'Retired') {
@@ -3594,10 +4011,27 @@ function updateCheckoutDueDefault() {
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
-function showToast(msg, type='') {
+function showToast(msg, type='', action = null) {
   const t = document.getElementById('toast');
-  t.textContent = msg; t.className = 'toast show ' + type;
-  setTimeout(() => t.className = 'toast', 3000);
+  if (!t) return;
+  if (toastTimer) clearTimeout(toastTimer);
+  t.textContent = '';
+  const text = document.createElement('span');
+  text.textContent = msg;
+  t.appendChild(text);
+  if (action && action.label && typeof action.onClick === 'function') {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = action.label;
+    btn.onclick = () => {
+      if (toastTimer) clearTimeout(toastTimer);
+      t.className = 'toast';
+      action.onClick();
+    };
+    t.appendChild(btn);
+  }
+  t.className = 'toast show ' + type;
+  toastTimer = setTimeout(() => t.className = 'toast', action ? 8000 : 3000);
 }
 
 function updateClock() {
@@ -3760,18 +4194,42 @@ function savePart() {
   if (savedPart) upsertPartToSheet(savedPart);
 }
 
-function deletePart(id) {
-  if (!confirm('Delete this part?')) return;
+async function deletePart(id) {
+  const part = partsInventory.find(p => p.id === id);
+  if (!part) return;
+  const ok = await appConfirm('Remove part', `Remove ${part.name || 'this part'} from the active parts list? You can undo right after.`, { confirmText: 'Remove', danger: true });
+  if (!ok) return;
+  const previous = { ...part };
   partsInventory = partsInventory.filter(p => p.id !== id);
   save(); renderParts(); populateRepairPartsSelect();
   deletePartFromSheet(id);
-  showToast('Part removed.');
+  showToast('Part removed.', 'success', {
+    label: 'Undo',
+    onClick: () => {
+      partsInventory.push(previous);
+      save(); renderParts(); populateRepairPartsSelect();
+      upsertPartToSheet(previous);
+      showToast('Part restored.', 'success');
+    }
+  });
 }
 
-function clearParts() {
-  if (!confirm(`Clear all ${partsInventory.length} parts? This cannot be undone.`)) return;
+async function clearParts() {
+  if (!partsInventory.length) { showToast('No parts to clear.'); return; }
+  const ok = await appConfirm('Clear parts inventory', `Remove all ${partsInventory.length.toLocaleString()} parts from the active parts list? You can undo right after.`, { confirmText: 'Clear Parts', danger: true });
+  if (!ok) return;
+  const previous = partsInventory.map(p => ({ ...p }));
   partsInventory = []; save(); renderParts(); populateRepairPartsSelect();
-  syncPartsToSheet(); showToast('Parts inventory cleared.');
+  syncPartsToSheet();
+  showToast('Parts inventory cleared.', 'success', {
+    label: 'Undo',
+    onClick: () => {
+      partsInventory = previous;
+      save(); renderParts(); populateRepairPartsSelect();
+      syncPartsToSheet();
+      showToast('Parts restored.', 'success');
+    }
+  });
 }
 
 function exportPartsCSV() {
